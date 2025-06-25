@@ -1,0 +1,32 @@
+From 609af66f9de22f6d64050a323d1be08395ff3a4e Mon Sep 17 00:00:00 2001
+From: Xiao Zhang <zhangxiao19@xiaomi.corp-partner.google.com>
+Date: Fri, 29 Nov 2024 09:08:16 +0000
+Subject: [PATCH 03/16] fix potential leakage issues
+
+If validating the size of the buffer fails during the flattening process of GraphicBuffer, fd leakage will occur; You can easily reproduce this problem when validating the size of the buffer fails or simply setting the error to non NOERROR.
+
+Bug: 381504577
+Test: Manual
+Google: 3381868
+Change-Id: I7e0ba4a889d6888cc5794a0f226f6638e104eb81
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ libs/ui/GraphicBuffer.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/libs/ui/GraphicBuffer.cpp b/libs/ui/GraphicBuffer.cpp
+index b0c6e44b2b..18c9a6bc48 100644
+--- a/libs/ui/GraphicBuffer.cpp
++++ b/libs/ui/GraphicBuffer.cpp
+@@ -596,6 +596,8 @@ status_t GraphicBuffer::unflatten(void const*& buffer, size_t& size, int const*&
+             width = height = stride = format = usage_deprecated = 0;
+             layerCount = 0;
+             usage = 0;
++            native_handle_close(handle);
++            native_handle_delete(const_cast<native_handle_t*>(handle));
+             handle = nullptr;
+             ALOGE("unflatten: registerBuffer failed: %s (%d)", strerror(-err), err);
+             return err;
+-- 
+2.34.1
+

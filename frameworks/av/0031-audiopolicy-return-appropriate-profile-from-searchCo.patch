@@ -1,0 +1,97 @@
+From a46f62198eb71caee0f767c001e388c3adc2e2a3 Mon Sep 17 00:00:00 2001
+From: Jaideep Sharma <quic_jaidshar@quicinc.com>
+Date: Wed, 5 Feb 2025 15:04:44 +0530
+Subject: [PATCH 31/37] audiopolicy: return appropriate profile from
+ searchCompatibleProfileHwModules
+
+The current logic for getting IoProfile prefers to select a profile with
+AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD when "directOnly" profiles are
+fetched.
+
+However, if configurations support a mixport with exactly
+"AUDIO_OUTPUT_FLAG_DIRECT", and a "directOnly" profile is fetched with
+"AUDIO_OUTPUT_FLAG_DIRECT", the current logic still ends up providing a
+AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD profile. This is because the
+compress_offload profile is defined as
+(AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD | AUDIO_OUTPUT_FLAG_DIRECT).
+
+Modify the logic to check the requested flags. If a profile with
+AUDIO_OUTPUT_FLAG_DIRECT is requested and APM has a
+AUDIO_OUTPUT_FLAG_DIRECT profile, return the appropriate profile.
+
+Bug: 393531112
+
+Test: run audiopolicy_tests, audiorouting_tests, trackplayerbase_tests ,
+audiosystem_tests
+
+Test: CtsMediaAudioTestCases, CtsNativeMediaAAudioTestCases
+
+Google: 3476972
+Change-Id: Ieabe99c5b0fba329195a072583115f6ce5f9c41f
+---
+ .../managerdefault/AudioPolicyManager.cpp     | 24 +++++++++++--------
+ .../test_phone_apm_configuration.xml          |  2 ++
+ 2 files changed, 16 insertions(+), 10 deletions(-)
+
+diff --git a/services/audiopolicy/managerdefault/AudioPolicyManager.cpp b/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
+index df71db5409..3cc080e546 100644
+--- a/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
++++ b/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
+@@ -1139,7 +1139,9 @@ sp<IOProfile> AudioPolicyManager::searchCompatibleProfileHwModules (
+                                         audio_channel_mask_t channelMask,
+                                         audio_output_flags_t flags,
+                                         bool directOnly) {
+-    sp<IOProfile> profile;
++    sp<IOProfile> directOnlyProfile = nullptr;
++    sp<IOProfile> compressOffloadProfile = nullptr;
++    sp<IOProfile> profile = nullptr;
+     for (const auto& hwModule : hwModules) {
+         for (const auto& curProfile : hwModule->getOutputProfiles()) {
+              if (curProfile->getCompatibilityScore(devices,
+@@ -1161,19 +1163,21 @@ sp<IOProfile> AudioPolicyManager::searchCompatibleProfileHwModules (
+                 return curProfile;
+              }
+ 
+-             // when searching for direct outputs, if several profiles are compatible, give priority
+-             // to one with offload capability
+-             if (profile != 0 &&
+-                 ((curProfile->getFlags() & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) == 0)) {
+-                continue;
+-             }
+              profile = curProfile;
+-             if ((profile->getFlags() & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) != 0) {
+-                 break;
++             if ((flags == AUDIO_OUTPUT_FLAG_DIRECT) &&
++                 curProfile->getFlags() == AUDIO_OUTPUT_FLAG_DIRECT) {
++                 directOnlyProfile = curProfile;
++             }
++
++             if ((curProfile->getFlags() & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) != 0) {
++                 compressOffloadProfile = curProfile;
+              }
+         }
+     }
+-    return profile;
++
++    return directOnlyProfile ? directOnlyProfile
++                            : (compressOffloadProfile ? compressOffloadProfile : profile);
++
+ }
+ 
+ sp<IOProfile> AudioPolicyManager::getSpatializerOutputProfile(
+diff --git a/services/audiopolicy/tests/resources/test_phone_apm_configuration.xml b/services/audiopolicy/tests/resources/test_phone_apm_configuration.xml
+index efe1400fc8..98299e6293 100644
+--- a/services/audiopolicy/tests/resources/test_phone_apm_configuration.xml
++++ b/services/audiopolicy/tests/resources/test_phone_apm_configuration.xml
+@@ -43,6 +43,8 @@
+                 </mixPort>
+                 <mixPort name="compressed_offload" role="source"
+                          flags="AUDIO_OUTPUT_FLAG_DIRECT AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD AUDIO_OUTPUT_FLAG_NON_BLOCKING AUDIO_OUTPUT_FLAG_GAPLESS_OFFLOAD">
++                    <profile name="" format="AUDIO_FORMAT_PCM_FLOAT"
++                             samplingRates="48000 96000 384000" channelMasks="AUDIO_CHANNEL_OUT_STEREO"/>
+                     <profile name="" format="AUDIO_FORMAT_MP3"
+                              samplingRates="8000 16000 24000 32000 44100 48000 96000"
+                              channelMasks="AUDIO_CHANNEL_OUT_STEREO AUDIO_CHANNEL_OUT_MONO"/>
+-- 
+2.34.1
+

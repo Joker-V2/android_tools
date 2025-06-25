@@ -1,0 +1,44 @@
+From 0526d13f336883d9d260ea2422ccbdc6124ecfe1 Mon Sep 17 00:00:00 2001
+From: Dmitrii <bankersenator@gmail.com>
+Date: Sun, 5 May 2024 00:29:02 +0000
+Subject: [PATCH 19/23] CameraServiceProxy: fix exception
+
+05-04 19:12:59.986  4730  4730 E System  : java.lang.RuntimeException: Failed to start service com.android.server.camera.CameraServiceProxy: onStart threw an exception
+05-04 19:12:59.986  4730  4730 E System  : 	at com.android.server.SystemServiceManager.startService(SystemServiceManager.java:257)
+05-04 19:12:59.986  4730  4730 E System  : 	at com.android.server.SystemServiceManager.startService(SystemServiceManager.java:233)
+05-04 19:12:59.986  4730  4730 E System  : 	at com.android.server.SystemServer.startOtherServices(SystemServer.java:1658)
+05-04 19:12:59.986  4730  4730 E System  : 	at com.android.server.SystemServer.run(SystemServer.java:983)
+05-04 19:12:59.986  4730  4730 E System  : 	at com.android.server.SystemServer.main(SystemServer.java:704)
+05-04 19:12:59.986  4730  4730 E System  : 	at java.lang.reflect.Method.invoke(Native Method)
+05-04 19:12:59.986  4730  4730 E System  : 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:552)
+05-04 19:12:59.986  4730  4730 E System  : 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:856)
+05-04 19:12:59.986  4730  4730 E System  : Caused by: java.lang.SecurityException: android: One of RECEIVER_EXPORTED or RECEIVER_NOT_EXPORTED should be specified when a receiver isn't being registered exclusively for system broadcasts
+05-04 19:12:59.986  4730  4730 E System  : 	at com.android.server.am.ActivityManagerService.registerReceiverWithFeature(ActivityManagerService.java:14369)
+05-04 19:12:59.986  4730  4730 E System  : 	at android.app.ContextImpl.registerReceiverInternal(ContextImpl.java:1885)
+05-04 19:12:59.986  4730  4730 E System  : 	at android.app.ContextImpl.registerReceiver(ContextImpl.java:1825)
+05-04 19:12:59.986  4730  4730 E System  : 	at android.app.ContextImpl.registerReceiver(ContextImpl.java:1813)
+05-04 19:12:59.986  4730  4730 E System  : 	at com.android.server.camera.CameraServiceProxy.onStart(CameraServiceProxy.java:747)
+05-04 19:12:59.986  4730  4730 E System  : 	at com.android.server.SystemServiceManager.startService(SystemServiceManager.java:255)
+
+Signed-off-by: Dmitrii <bankersenator@gmail.com>
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ .../core/java/com/android/server/camera/CameraServiceProxy.java | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/services/core/java/com/android/server/camera/CameraServiceProxy.java b/services/core/java/com/android/server/camera/CameraServiceProxy.java
+index 05fc6bc869ca..c7206d849352 100644
+--- a/services/core/java/com/android/server/camera/CameraServiceProxy.java
++++ b/services/core/java/com/android/server/camera/CameraServiceProxy.java
+@@ -1043,7 +1043,7 @@ public class CameraServiceProxy extends SystemService
+         filter.addAction(Intent.ACTION_MANAGED_PROFILE_REMOVED);
+         filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+-        mContext.registerReceiver(mIntentReceiver, filter);
++        mContext.registerReceiver(mIntentReceiver, filter, Context.RECEIVER_EXPORTED);
+ 
+         publishBinderService(CAMERA_SERVICE_PROXY_BINDER_NAME, mCameraServiceProxy);
+         publishLocalService(CameraServiceProxy.class, this);
+-- 
+2.34.1
+

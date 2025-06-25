@@ -1,0 +1,116 @@
+From bc1be3fca89e8c4a8fc9fb2d675f311cd653edc8 Mon Sep 17 00:00:00 2001
+From: johnmart19 <johnivan19999@gmail.com>
+Date: Sat, 27 May 2023 07:43:14 +0300
+Subject: [PATCH 02/16] Native: ProducerListener: Import ON_BUFFER_DETACHED
+ Changes
+
+- Miui Camera requires it
+E CAM_MiCamAlgoInterfaceJNI: can not load library:camera_algoup_jni.xiaomi : java.lang.UnsatisfiedLinkError: dlopen failed: cannot locate symbol "_ZN7android18BnProducerListener16onBufferDetachedEi" referenced by "/system/lib64/libcamera_algoup_jni.xiaomi.so"...
+
+Change-Id: If79a0a75d02ab87e38e6122520964c0d9c3e63d5
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ libs/gui/IProducerListener.cpp                             | 7 +++++++
+ libs/gui/bufferqueue/1.0/WProducerListener.cpp             | 3 +++
+ libs/gui/bufferqueue/2.0/H2BProducerListener.cpp           | 3 +++
+ libs/gui/include/gui/IProducerListener.h                   | 2 ++
+ libs/gui/include/gui/bufferqueue/1.0/WProducerListener.h   | 1 +
+ libs/gui/include/gui/bufferqueue/2.0/H2BProducerListener.h | 1 +
+ 6 files changed, 17 insertions(+)
+
+diff --git a/libs/gui/IProducerListener.cpp b/libs/gui/IProducerListener.cpp
+index 8b9b090496..fa190f8a52 100644
+--- a/libs/gui/IProducerListener.cpp
++++ b/libs/gui/IProducerListener.cpp
+@@ -123,6 +123,10 @@ public:
+     virtual void onBuffersDiscarded(const std::vector<int32_t>& discardedSlots) override {
+         return mBase->onBuffersDiscarded(discardedSlots);
+     }
++
++    virtual void onBufferDetached(int slot) {
++        mBase->onBufferDetached(slot);
++    }
+ };
+ 
+ IMPLEMENT_HYBRID_META_INTERFACE(ProducerListener,
+@@ -190,4 +194,7 @@ bool BnProducerListener::needsAttachNotify() {
+ }
+ #endif
+ 
++void BnProducerListener::onBufferDetached(int slot) {
++    ALOGE("BnProducerListener::onBufferDetached slot: %d",slot);
++}
+ } // namespace android
+diff --git a/libs/gui/bufferqueue/1.0/WProducerListener.cpp b/libs/gui/bufferqueue/1.0/WProducerListener.cpp
+index 56b64b9ddd..7a3e050561 100644
+--- a/libs/gui/bufferqueue/1.0/WProducerListener.cpp
++++ b/libs/gui/bufferqueue/1.0/WProducerListener.cpp
+@@ -49,4 +49,7 @@ bool LWProducerListener::needsReleaseNotify() {
+ void LWProducerListener::onBuffersDiscarded(const std::vector<int32_t>& /*slots*/) {
+ }
+ 
++void LWProducerListener::onBufferDetached(int /*slot*/) {
++}
++
+ }  // namespace android
+diff --git a/libs/gui/bufferqueue/2.0/H2BProducerListener.cpp b/libs/gui/bufferqueue/2.0/H2BProducerListener.cpp
+index b2bd1172d6..745ffea75f 100644
+--- a/libs/gui/bufferqueue/2.0/H2BProducerListener.cpp
++++ b/libs/gui/bufferqueue/2.0/H2BProducerListener.cpp
+@@ -55,6 +55,9 @@ bool H2BProducerListener::needsReleaseNotify() {
+ void H2BProducerListener::onBuffersDiscarded(const std::vector<int32_t>& /*slots*/) {
+ }
+ 
++void H2BProducerListener::onBufferDetached(int /*slot*/) {
++}
++
+ }  // namespace utils
+ }  // namespace V2_0
+ }  // namespace bufferqueue
+diff --git a/libs/gui/include/gui/IProducerListener.h b/libs/gui/include/gui/IProducerListener.h
+index 43bf6a7d4b..3b83c5780a 100644
+--- a/libs/gui/include/gui/IProducerListener.h
++++ b/libs/gui/include/gui/IProducerListener.h
+@@ -90,6 +90,7 @@ public:
+             Parcel* reply, uint32_t flags = 0);
+     virtual bool needsReleaseNotify();
+     virtual void onBuffersDiscarded(const std::vector<int32_t>& slots);
++    virtual void onBufferDetached(int slot);
+ #if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(BQ_CONSUMER_ATTACH_CALLBACK)
+     virtual bool needsAttachNotify();
+ #endif
+@@ -106,6 +107,7 @@ public:
+     virtual ~StubProducerListener();
+     virtual void onBufferReleased() {}
+     virtual bool needsReleaseNotify() { return false; }
++    virtual void onBufferDetached(int /**slot**/) {}
+ #if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(BQ_CONSUMER_ATTACH_CALLBACK)
+     virtual bool needsAttachNotify() { return false; }
+ #endif
+diff --git a/libs/gui/include/gui/bufferqueue/1.0/WProducerListener.h b/libs/gui/include/gui/bufferqueue/1.0/WProducerListener.h
+index 197db26444..efdd5aad5a 100644
+--- a/libs/gui/include/gui/bufferqueue/1.0/WProducerListener.h
++++ b/libs/gui/include/gui/bufferqueue/1.0/WProducerListener.h
+@@ -55,6 +55,7 @@ public:
+     void onBufferReleased() override;
+     bool needsReleaseNotify() override;
+     void onBuffersDiscarded(const std::vector<int32_t>& slots) override;
++    void onBufferDetached(int slot) override;
+ };
+ 
+ }  // namespace android
+diff --git a/libs/gui/include/gui/bufferqueue/2.0/H2BProducerListener.h b/libs/gui/include/gui/bufferqueue/2.0/H2BProducerListener.h
+index 92650b701b..d66c025fe3 100644
+--- a/libs/gui/include/gui/bufferqueue/2.0/H2BProducerListener.h
++++ b/libs/gui/include/gui/bufferqueue/2.0/H2BProducerListener.h
+@@ -47,6 +47,7 @@ public:
+     virtual void onBufferReleased() override;
+     virtual bool needsReleaseNotify() override;
+     virtual void onBuffersDiscarded(const std::vector<int32_t>& slots) override;
++    virtual void onBufferDetached(int slot) override;
+ };
+ 
+ }  // namespace utils
+-- 
+2.34.1
+

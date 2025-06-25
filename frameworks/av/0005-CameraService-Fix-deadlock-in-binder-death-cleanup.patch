@@ -1,0 +1,33 @@
+From 43ff89dc3e4059226064ef00349aa4d5834ff6c9 Mon Sep 17 00:00:00 2001
+From: Mounika Reddy Tangirala <mtangi@codeaurora.org>
+Date: Tue, 22 May 2018 17:41:52 +0530
+Subject: [PATCH 05/37] CameraService: Fix deadlock in binder death cleanup
+
+In the event of a binder death, there is a chance of deadlock
+due to recursive lock acquisition in the death handling sequence.
+Fix:
+Clear evicted client list before acquiring service lock.
+
+Change-Id: I6fc5fa6e01c002bc46be058fcd977be14cae0270
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ services/camera/libcameraservice/CameraService.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/services/camera/libcameraservice/CameraService.cpp b/services/camera/libcameraservice/CameraService.cpp
+index fdb5b7d11c..e5829f63a7 100644
+--- a/services/camera/libcameraservice/CameraService.cpp
++++ b/services/camera/libcameraservice/CameraService.cpp
+@@ -3814,7 +3814,8 @@ bool CameraService::evictClientIdByRemote(const wp<IBinder>& remote) {
+                 ret = true;
+             }
+         }
+-
++        //clear the evicted client list before acquring service lock again.
++        evicted.clear();
+         // Reacquire mServiceLock
+         mServiceLock.lock();
+ 
+-- 
+2.34.1
+

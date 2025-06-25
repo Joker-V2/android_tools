@@ -1,0 +1,39 @@
+From a57dc9162290edb24e9bc4920cbe4f991fcd76f9 Mon Sep 17 00:00:00 2001
+From: Susmitha Gummalla <vgummall@codeaurora.org>
+Date: Tue, 27 Aug 2019 16:38:37 -0800
+Subject: [PATCH 06/37] Camera: Flush Improvements - Result drain optimization
+
+-Avoid waiting on results once flush is completed
+-Help improve camera switch KPI
+
+CRs-Fixed: 2525025
+Change-Id: I0db7877b6582c281a178035d4c202a5bd6aaaca8
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ .../camera/libcameraservice/device3/Camera3Device.cpp     | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/services/camera/libcameraservice/device3/Camera3Device.cpp b/services/camera/libcameraservice/device3/Camera3Device.cpp
+index 859e6f6c47..f09b8a8e30 100644
+--- a/services/camera/libcameraservice/device3/Camera3Device.cpp
++++ b/services/camera/libcameraservice/device3/Camera3Device.cpp
+@@ -3413,9 +3413,15 @@ status_t Camera3Device::RequestThread::clear(
+ 
+ status_t Camera3Device::RequestThread::flush() {
+     ATRACE_CALL();
++    status_t flush_status;
+     Mutex::Autolock l(mFlushLock);
+ 
+-    return mInterface->flush();
++    flush_status = mInterface->flush();
++    // We have completed flush, signal RequestThread::waitForNextRequestLocked() to no longer wait for
++    // new requests
++    mRequestSignal.signal();
++
++    return flush_status;
+ }
+ 
+ void Camera3Device::RequestThread::setPaused(bool paused) {
+-- 
+2.34.1
+

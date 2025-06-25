@@ -1,0 +1,35 @@
+From 4695152f363ba5a3ea623396c1b9b4a0e92c72d5 Mon Sep 17 00:00:00 2001
+From: Ido Ben-Hur <idoybh2@gmail.com>
+Date: Thu, 12 Nov 2020 18:05:38 +0200
+Subject: [PATCH 10/23] CameraManager: Fixup exposing aux camera to apps
+
+Since when are we doing stuff like this?
+Save some runtime, even if a bit. Also look cleaner.
+eb6ebc0c30d1ad582189c2d08d9f683ce18d8e64
+
+@neobuddy89: Updated for A15.
+
+Change-Id: Ic8c5844321a7310c2b72e1d7c2eceb5e3e8285e2
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ core/java/android/hardware/camera2/CameraManager.java | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/core/java/android/hardware/camera2/CameraManager.java b/core/java/android/hardware/camera2/CameraManager.java
+index 90ffedabda9a..a4e2e41f32a4 100644
+--- a/core/java/android/hardware/camera2/CameraManager.java
++++ b/core/java/android/hardware/camera2/CameraManager.java
+@@ -2487,8 +2487,8 @@ public final class CameraManager {
+             try {
+                 List<String> cameraIds = new ArrayList<>();
+                 boolean exposeAuxCamera = Camera.shouldExposeAuxCamera();
+-                for (int i = 0; i < mDeviceStatus.size(); i++) {
+-                    if (!exposeAuxCamera && i == 2) break;
++                int size = exposeAuxCamera ? mDeviceStatus.size() : 2;
++                for (int i = 0; i < size; i++) {
+                     int status = mDeviceStatus.valueAt(i);
+                     DeviceCameraInfo info = mDeviceStatus.keyAt(i);
+                     if (status == ICameraServiceListener.STATUS_NOT_PRESENT
+-- 
+2.34.1
+

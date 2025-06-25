@@ -1,0 +1,33 @@
+From 5b2832f3c1038b8e583bf5f8cf8f04e484b357dd Mon Sep 17 00:00:00 2001
+From: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Date: Sat, 31 Dec 2022 08:31:30 +0000
+Subject: [PATCH 05/16] SF: Don't enable expensive rendering for unknown
+ dataspace
+
+Layer dataspace is initialized as unknown by default, unless
+overriden by the buffer source. We don't require expensive
+rendering for color conversion when the dataspace is unknown.
+
+Change-Id: I079c520f63a65c77ba3162664656e607eafff991
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ services/surfaceflinger/CompositionEngine/src/Output.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/services/surfaceflinger/CompositionEngine/src/Output.cpp b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+index 205f92af19..42c7a3b8fe 100644
+--- a/services/surfaceflinger/CompositionEngine/src/Output.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+@@ -1402,7 +1402,8 @@ std::optional<base::unique_fd> Output::composeSurfaces(
+             std::any_of(clientCompositionLayers.begin(), clientCompositionLayers.end(),
+                         [outputDataspace =
+                                  clientCompositionDisplay.outputDataspace](const auto& layer) {
+-                            return layer.sourceDataspace != outputDataspace;
++                            return layer.sourceDataspace != ui::Dataspace::UNKNOWN
++                                    && layer.sourceDataspace != outputDataspace;
+                         });
+     if (expensiveRenderingExpected) {
+         setExpensiveRenderingExpected(true);
+-- 
+2.34.1
+

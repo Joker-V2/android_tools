@@ -1,0 +1,62 @@
+From 82e9d3e55c0e58901a1e6b224f3b95781aa3eda1 Mon Sep 17 00:00:00 2001
+From: Gaoxiang Chen <gaochen@codeaurora.org>
+Date: Wed, 12 Apr 2017 20:05:24 +0800
+Subject: [PATCH 11/23] Camera: Ignore torch status update for aux or composite
+ camera
+
+Issue:
+  We only expose aux and composite camera ids to whitelist app,
+  but don't check the whitelist in torch status update.
+  So for apps not in whitelist like CTS,
+  they might receive extra unexpected torch status update,
+  from aux and composite camera, which could cause CTS failure.
+
+Fix:
+  Also ignore torch status update, if app not in whitelist.
+  It can fixe CTS issues in FlashlightTest.java.
+
+CRs-Fixed: 2033688
+Change-Id: I308bccfc027017b590f9f91089d644f7d8a206ff
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ .../android/hardware/camera2/CameraManager.java | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/core/java/android/hardware/camera2/CameraManager.java b/core/java/android/hardware/camera2/CameraManager.java
+index a4e2e41f32a4..dfa663102832 100644
+--- a/core/java/android/hardware/camera2/CameraManager.java
++++ b/core/java/android/hardware/camera2/CameraManager.java
+@@ -2817,6 +2817,14 @@ public final class CameraManager {
+                     throw new IllegalArgumentException("cameraId was null");
+                 }
+ 
++                /* Force to expose only two cameras
++                 * if the package name does not falls in this bucket
++                 */
++                boolean exposeAuxCamera = Camera.shouldExposeAuxCamera();
++                if (exposeAuxCamera == false && (Integer.parseInt(cameraId) >= 2)) {
++                    throw new IllegalArgumentException("invalid cameraId");
++                }
++
+                 ICameraService cameraService = getCameraService();
+                 if (cameraService == null) {
+                     throw new CameraAccessException(CameraAccessException.CAMERA_DISCONNECTED,
+@@ -3240,6 +3248,15 @@ public final class CameraManager {
+                         info.mCameraId, status, info.mDeviceId));
+             }
+ 
++            /* Force to ignore the aux or composite camera torch status update
++             * if the package name does not falls in this bucket
++             */
++            boolean exposeAuxCamera = Camera.shouldExposeAuxCamera();
++            if (exposeAuxCamera == false && Integer.parseInt(info.mCameraId) >= 2) {
++                Log.w(TAG, "ignore the torch status update of camera: " + info.mCameraId);
++                return;
++            }
++
+             if (!validTorchStatus(status)) {
+                 Log.e(TAG, String.format(
+                         "Ignoring invalid camera %s torch status 0x%x for device %d",
+-- 
+2.34.1
+

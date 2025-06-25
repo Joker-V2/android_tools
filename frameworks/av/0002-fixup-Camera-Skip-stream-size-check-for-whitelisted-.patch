@@ -1,0 +1,27 @@
+From 8a644e7233b466854768aab1444a32f16fecc9de Mon Sep 17 00:00:00 2001
+From: Arian <arian.kulmer@web.de>
+Date: Mon, 30 Jan 2023 09:31:15 +0000
+Subject: [PATCH 02/37] fixup! Camera: Skip stream size check for whitelisted
+ apps
+
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ .../camera/libcameraservice/utils/SessionConfigurationUtils.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/services/camera/libcameraservice/utils/SessionConfigurationUtils.cpp b/services/camera/libcameraservice/utils/SessionConfigurationUtils.cpp
+index 9be5e2d7ed..fe19b96f0d 100644
+--- a/services/camera/libcameraservice/utils/SessionConfigurationUtils.cpp
++++ b/services/camera/libcameraservice/utils/SessionConfigurationUtils.cpp
+@@ -513,7 +513,7 @@ binder::Status createSurfaceFromGbp(
+     uint64_t allowedFlags = GraphicBuffer::USAGE_SW_READ_MASK |
+                            GraphicBuffer::USAGE_HW_TEXTURE |
+                            GraphicBuffer::USAGE_HW_COMPOSER;
+-    bool flexibleConsumer = (consumerUsage & disallowedFlags) == 0 &&
++    bool flexibleConsumer = !isPriviledgedClient && (consumerUsage & disallowedFlags) == 0 &&
+             (consumerUsage & allowedFlags) != 0;
+ 
+     surface = new Surface(gbp, useAsync);
+-- 
+2.34.1
+

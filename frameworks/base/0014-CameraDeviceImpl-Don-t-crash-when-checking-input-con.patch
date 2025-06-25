@@ -1,0 +1,52 @@
+From 68a85082ab537c80265cebc5943d12c463626725 Mon Sep 17 00:00:00 2001
+From: Xayah <zds1249475336@gmail.com>
+Date: Sat, 29 Oct 2022 02:53:08 +0800
+Subject: [PATCH 14/23] CameraDeviceImpl: Don't crash when checking input
+ configuration failed
+
+* For some reason, some devices(like cas) which ported miui camera could not take 48mp photos because of this exception, so we just catch it to make it work.
+
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: Camera FC, msg=Input config with format 35 and size 8000x6000 not supported by camera id 7
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: java.lang.IllegalArgumentException: Input config with format 35 and size 8000x6000 not supported by camera id 7
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at android.hardware.camera2.impl.CameraDeviceImpl.checkInputConfiguration(CameraDeviceImpl.java:1547)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at android.hardware.camera2.impl.CameraDeviceImpl.configureStreamsChecked(CameraDeviceImpl.java:445)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at android.hardware.camera2.impl.CameraDeviceImpl.createCaptureSessionInternal(CameraDeviceImpl.java:723)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at android.hardware.camera2.impl.CameraDeviceImpl.createCaptureSession(CameraDeviceImpl.java:677)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at com.xiaomi.camera.imagecodec.impl.VirtualCameraReprocessor.createCaptureSessionWithSessionConfiguration(VirtualCameraReprocessor.java:4)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at com.xiaomi.camera.imagecodec.impl.VirtualCameraReprocessor.createReprocessSession(VirtualCameraReprocessor.java:26)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at com.xiaomi.camera.imagecodec.impl.VirtualCameraReprocessor.createCaptureSessionIfNeed(VirtualCameraReprocessor.java:44)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at com.xiaomi.camera.imagecodec.impl.VirtualCameraReprocessor.checkConditionIsReady(VirtualCameraReprocessor.java:8)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at com.xiaomi.camera.imagecodec.impl.VirtualCameraReprocessor.access$1500(VirtualCameraReprocessor.java:1)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at com.xiaomi.camera.imagecodec.impl.VirtualCameraReprocessor$ReprocessHandler.handleMessage(VirtualCameraReprocessor.java:13)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at android.os.Handler.dispatchMessage(Handler.java:106)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at android.os.Looper.loopOnce(Looper.java:201)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at android.os.Looper.loop(Looper.java:288)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+10-27 00:07:50.879  8331  8432 E CAM_CameraFCHandler: mDefaultHandler=com.android.internal.os.RuntimeInit$KillApplicationHandler@18f49b8
+
+Change-Id: Ic80dd6e81ac2269e2879ac1a41a3e4e6e081a682
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ .../android/hardware/camera2/impl/CameraDeviceImpl.java     | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/core/java/android/hardware/camera2/impl/CameraDeviceImpl.java b/core/java/android/hardware/camera2/impl/CameraDeviceImpl.java
+index 0476cac8c90f..43df97d2a05f 100644
+--- a/core/java/android/hardware/camera2/impl/CameraDeviceImpl.java
++++ b/core/java/android/hardware/camera2/impl/CameraDeviceImpl.java
+@@ -623,7 +623,11 @@ public class CameraDeviceImpl extends CameraDevice
+                     "any output streams");
+         }
+ 
+-        checkInputConfiguration(inputConfig);
++        try {
++            checkInputConfiguration(inputConfig);
++        } catch (IllegalArgumentException e) {
++            Log.w(TAG, "Check input configuration failed due to: " + e.getMessage());
++        }
+ 
+         boolean success = false;
+ 
+-- 
+2.34.1
+

@@ -1,0 +1,81 @@
+From ae81555f461b8654b168e3aed12fc6b64b83f643 Mon Sep 17 00:00:00 2001
+From: Laiwen Zhu <Laiwen.Zhu@gm.com>
+Date: Tue, 4 Feb 2025 09:42:49 -0500
+Subject: [PATCH 27/37] AAudio: fix NotificationClient linkToDeath error
+
+Enhance the handling of race condition, otherwise when it happens, there
+is the possibility that no death monitor is linked to the binder for the
+new client due to the binder was not set in the NotificationClient
+instance, hence when that client dies, there would be no way to inform
+audio framework to close its stream.
+
+Submitted on behalf of Laiwen.Zhu@gm.com
+
+Bug: 381398054
+Test: manual test with mobile devices
+Flag: EXEMPT bugfix
+Google: 3493210
+Change-Id: Id9fca4a998b1a3a553e618428f243e54c5f6717a
+---
+ services/oboeservice/AAudioClientTracker.cpp | 18 +++++++++++++++---
+ services/oboeservice/AAudioClientTracker.h   |  8 ++++++++
+ 2 files changed, 23 insertions(+), 3 deletions(-)
+
+diff --git a/services/oboeservice/AAudioClientTracker.cpp b/services/oboeservice/AAudioClientTracker.cpp
+index c91ead0482..407a5d94e4 100644
+--- a/services/oboeservice/AAudioClientTracker.cpp
++++ b/services/oboeservice/AAudioClientTracker.cpp
+@@ -74,16 +74,28 @@ aaudio_result_t AAudioClientTracker::registerClient(pid_t pid,
+     }
+ 
+     const std::lock_guard<std::mutex> lock(mLock);
++    sp<NotificationClient> notificationClient;
++    status_t status;
++    sp<IBinder> binder = IInterface::asBinder(client);
+     if (mNotificationClients.count(pid) == 0) {
+-        const sp<IBinder> binder = IInterface::asBinder(client);
+-        const sp<NotificationClient> notificationClient = new NotificationClient(pid, binder);
++        notificationClient = new NotificationClient(pid, binder);
+         mNotificationClients[pid] = notificationClient;
+ 
+-        const status_t status = binder->linkToDeath(notificationClient);
++        status = binder->linkToDeath(notificationClient);
+         ALOGW_IF(status != NO_ERROR, "registerClient() linkToDeath = %d\n", status);
+         return AAudioConvert_androidToAAudioResult(status);
+     } else {
+         ALOGW("registerClient(%d) already registered!", pid);
++        notificationClient = mNotificationClients[pid];
++        if (notificationClient-> isBinderNull()) {
++            ALOGW("registerClient() need to linkToDeath as notificationClient binder is null");
++            status = binder->linkToDeath(notificationClient);
++            if (status != NO_ERROR) {
++                ALOGE("registerClient() linkToDeath status = %d\n", status);
++            } else {
++                notificationClient->setBinder(binder);
++            }
++        }
+         return AAUDIO_OK; // TODO should this be considered an error
+     }
+ }
+diff --git a/services/oboeservice/AAudioClientTracker.h b/services/oboeservice/AAudioClientTracker.h
+index 3d4ab3402d..0cc96492fd 100644
+--- a/services/oboeservice/AAudioClientTracker.h
++++ b/services/oboeservice/AAudioClientTracker.h
+@@ -104,6 +104,14 @@ private:
+             return mExclusiveEnabled;
+         }
+ 
++        bool isBinderNull() {
++            return mBinder == nullptr;
++        }
++
++        void setBinder(android::sp<IBinder>& binder) {
++            mBinder = binder;
++        }
++
+         // IBinder::DeathRecipient
+         void binderDied(const android::wp<IBinder>& who) override;
+ 
+-- 
+2.34.1
+

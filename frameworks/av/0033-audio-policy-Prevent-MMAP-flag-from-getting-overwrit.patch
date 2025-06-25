@@ -1,0 +1,37 @@
+From 10f9e419c8fa75e7a21f6511ac737f171c4ee0c3 Mon Sep 17 00:00:00 2001
+From: Raghu Ballappa Bankapur <quic_rbankapu@quicinc.com>
+Date: Wed, 13 Nov 2024 18:02:26 +0530
+Subject: [PATCH 33/37] audio policy: Prevent MMAP flag from getting
+ overwritten with VoIP RX and Direct flag
+
+Test: Build and CTS
+Bug: 409250076
+Change-Id: Id54823cfbb30a2735b9014333def3bd2eb586008
+---
+ .../audiopolicy/managerdefault/AudioPolicyManager.cpp  | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/services/audiopolicy/managerdefault/AudioPolicyManager.cpp b/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
+index 3cc080e546..25b6d376ae 100644
+--- a/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
++++ b/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
+@@ -1786,9 +1786,13 @@ audio_io_handle_t AudioPolicyManager::getOutputForDevices(
+     } else if (stream == AUDIO_STREAM_VOICE_CALL &&
+                audio_is_linear_pcm(config->format) &&
+                (*flags & AUDIO_OUTPUT_FLAG_INCALL_MUSIC) == 0) {
+-        *flags = (audio_output_flags_t)(AUDIO_OUTPUT_FLAG_VOIP_RX |
+-                                       AUDIO_OUTPUT_FLAG_DIRECT);
+-        ALOGV("Set VoIP and Direct output flags for PCM format");
++        if (*flags & AUDIO_OUTPUT_FLAG_MMAP_NOIRQ) {
++            ALOGV("MMAP flag set, ignoring VoIP & direct output flags");
++        } else {
++            *flags = (audio_output_flags_t)(AUDIO_OUTPUT_FLAG_VOIP_RX |
++                                           AUDIO_OUTPUT_FLAG_DIRECT);
++            ALOGV("Set VoIP and Direct output flags for PCM format");
++        }
+     }
+ 
+     // Attach the Ultrasound flag for the AUDIO_CONTENT_TYPE_ULTRASOUND
+-- 
+2.34.1
+

@@ -1,0 +1,60 @@
+From 7d5a924914e80ef3e476621bff073b7a2827f804 Mon Sep 17 00:00:00 2001
+From: guochuang <guochuang@xiaomi.corp-partner.google.com>
+Date: Thu, 9 Jan 2025 19:55:19 +0800
+Subject: [PATCH 24/37] Nuplayer: remove CHECKs in updateVideoSize
+
+Bug: 388723642
+Test: MediaPlayerTest
+Google: 3442508
+Change-Id: I2d6468c1b7806e8ef073f7dc6b02f6589421d873
+Signed-off-by: guochuang <guochuang@xiaomi.corp-partner.google.com>
+---
+ .../nuplayer/NuPlayer.cpp                     | 29 +++++++++----------
+ 1 file changed, 14 insertions(+), 15 deletions(-)
+
+diff --git a/media/libmediaplayerservice/nuplayer/NuPlayer.cpp b/media/libmediaplayerservice/nuplayer/NuPlayer.cpp
+index 15981affd6..45358a1cc6 100644
+--- a/media/libmediaplayerservice/nuplayer/NuPlayer.cpp
++++ b/media/libmediaplayerservice/nuplayer/NuPlayer.cpp
+@@ -2079,24 +2079,23 @@ void NuPlayer::updateVideoSize(
+ 
+     int32_t displayWidth, displayHeight;
+     if (outputFormat != NULL) {
+-        int32_t width, height;
+-        CHECK(outputFormat->findInt32("width", &width));
+-        CHECK(outputFormat->findInt32("height", &height));
+-
+-        int32_t cropLeft, cropTop, cropRight, cropBottom;
+-        CHECK(outputFormat->findRect(
++        int32_t width, height, cropLeft, cropTop, cropRight, cropBottom;
++        if (outputFormat->findInt32("width", &width)
++                && outputFormat->findInt32("height", &height)
++                && outputFormat->findRect(
+                     "crop",
+-                    &cropLeft, &cropTop, &cropRight, &cropBottom));
++                    &cropLeft, &cropTop, &cropRight, &cropBottom)) {
+ 
+-        displayWidth = cropRight - cropLeft + 1;
+-        displayHeight = cropBottom - cropTop + 1;
++            displayWidth = cropRight - cropLeft + 1;
++            displayHeight = cropBottom - cropTop + 1;
+ 
+-        ALOGV("Video output format changed to %d x %d "
+-             "(crop: %d x %d @ (%d, %d))",
+-             width, height,
+-             displayWidth,
+-             displayHeight,
+-             cropLeft, cropTop);
++            ALOGV("Video output format changed to %d x %d "
++                "(crop: %d x %d @ (%d, %d))",
++                width, height,
++                displayWidth,
++                displayHeight,
++                cropLeft, cropTop);
++        }
+     } else {
+         if (!inputFormat->findInt32("width", &displayWidth)
+             || !inputFormat->findInt32("height", &displayHeight)) {
+-- 
+2.34.1
+

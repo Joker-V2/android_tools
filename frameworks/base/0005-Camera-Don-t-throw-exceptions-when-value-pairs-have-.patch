@@ -1,0 +1,29 @@
+From d65c2803b0e278d3cc82e6176c652f58251a8167 Mon Sep 17 00:00:00 2001
+From: Ricardo Cerqueira <ricardo@cyngn.com>
+Date: Sat, 8 Nov 2014 04:28:02 +0000
+Subject: [PATCH 05/23] Camera: Don't throw exceptions when value pairs have
+ spaces in them
+
+"(1,2)" worked, "(1, 2)" crapped out. Fix it.
+
+Change-Id: I71262909280f88d930898a2bcf37d379add4fdea
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ core/java/android/hardware/Camera.java | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/core/java/android/hardware/Camera.java b/core/java/android/hardware/Camera.java
+index 4a9a543eabb5..a62e9e6ae11b 100644
+--- a/core/java/android/hardware/Camera.java
++++ b/core/java/android/hardware/Camera.java
+@@ -4625,6 +4625,7 @@ public class Camera {
+             splitter.setString(str);
+             int index = 0;
+             for (String s : splitter) {
++                s = s.replaceAll("\\s","");
+                 output[index++] = Integer.parseInt(s);
+             }
+         }
+-- 
+2.34.1
+

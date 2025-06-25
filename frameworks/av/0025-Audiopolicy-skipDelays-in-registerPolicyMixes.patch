@@ -1,0 +1,78 @@
+From 128389cc568c1d4136596fad87b1b88091788088 Mon Sep 17 00:00:00 2001
+From: "sc.heo" <sc.heo@hyundai.com>
+Date: Wed, 11 Dec 2024 14:51:03 +0900
+Subject: [PATCH 25/37] Audiopolicy : skipDelays in registerPolicyMixes
+
+A lot of time is spent in applyStreamVolumes() during registerPolicyMixes() updateCallAndOutputRouting()
+Test: atest audiopolicy_tests
+
+Bug: 381957270
+Google: 3404940
+Change-Id: I0de2111d8c4b9dbffe1346c59e4321917de1ef26
+---
+ .../managerdefault/AudioPolicyManager.cpp          | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/services/audiopolicy/managerdefault/AudioPolicyManager.cpp b/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
+index f133dfa2ca..df71db5409 100644
+--- a/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
++++ b/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
+@@ -4095,6 +4095,7 @@ status_t AudioPolicyManager::registerPolicyMixes(const Vector<AudioMix>& mixes)
+     bool checkOutputs = false;
+     sp<HwModule> rSubmixModule;
+     Vector<AudioMix> registeredMixes;
++    AudioDeviceTypeAddrVector devices;
+     // examine each mix's route type
+     for (size_t i = 0; i < mixes.size(); i++) {
+         AudioMix mix = mixes[i];
+@@ -4218,6 +4219,7 @@ status_t AudioPolicyManager::registerPolicyMixes(const Vector<AudioMix>& mixes)
+                 break;
+             } else {
+                 checkOutputs = true;
++                devices.push_back(AudioDeviceTypeAddr(mix.mDeviceType, mix.mDeviceAddress.c_str()));
+                 registeredMixes.add(mix);
+             }
+         }
+@@ -4233,7 +4235,10 @@ status_t AudioPolicyManager::registerPolicyMixes(const Vector<AudioMix>& mixes)
+         }
+     } else if (checkOutputs) {
+         checkForDeviceAndOutputChanges();
+-        updateCallAndOutputRouting();
++        changeOutputDevicesMuteState(devices);
++        updateCallAndOutputRouting(false /* forceVolumeReeval */, 0 /* delayMs */,
++            true /* skipDelays */);
++        changeOutputDevicesMuteState(devices);
+     }
+     return res;
+ }
+@@ -4244,6 +4249,7 @@ status_t AudioPolicyManager::unregisterPolicyMixes(Vector<AudioMix> mixes)
+     status_t res = NO_ERROR;
+     bool checkOutputs = false;
+     sp<HwModule> rSubmixModule;
++    AudioDeviceTypeAddrVector devices;
+     // examine each mix's route type
+     for (const auto& mix : mixes) {
+         if ((mix.mRouteFlags & MIX_ROUTE_FLAG_LOOP_BACK) == MIX_ROUTE_FLAG_LOOP_BACK) {
+@@ -4291,6 +4297,7 @@ status_t AudioPolicyManager::unregisterPolicyMixes(Vector<AudioMix> mixes)
+                 res = INVALID_OPERATION;
+                 continue;
+             } else {
++                devices.push_back(AudioDeviceTypeAddr(mix.mDeviceType, mix.mDeviceAddress.c_str()));
+                 checkOutputs = true;
+             }
+         }
+@@ -4298,7 +4305,10 @@ status_t AudioPolicyManager::unregisterPolicyMixes(Vector<AudioMix> mixes)
+ 
+     if (res == NO_ERROR && checkOutputs) {
+         checkForDeviceAndOutputChanges();
+-        updateCallAndOutputRouting();
++        changeOutputDevicesMuteState(devices);
++        updateCallAndOutputRouting(false /* forceVolumeReeval */, 0 /* delayMs */,
++            true /* skipDelays */);
++        changeOutputDevicesMuteState(devices);
+     }
+     return res;
+ }
+-- 
+2.34.1
+

@@ -1,0 +1,177 @@
+From 23055d6c923d4784ea408f82fd386062abc68d38 Mon Sep 17 00:00:00 2001
+From: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Date: Sat, 17 Dec 2022 03:22:53 +0530
+Subject: [PATCH 11/16] SF: Scheduler: set an expiration for heuristic layer's
+ high refresh rate usages
+
+Original change by Juhyung Park <qkrwngud825@gmail.com>,
+refactored and adapted to Android 13.
+
+Non-interactive heuristic layer's high refresh rate usages are overkill
+and unnecessary.
+
+Set a hard expiration limit to 3 seconds, or the idle timeout, whichever
+is higher.
+
+This effectively fixes/workarounds a major shortcoming in the whole
+scheduler where it's totally unaware of the view's sizes.
+
+For example, Instagram Reels with audios are played with a full-screen
+video layer and a small animating audio icon at the bottom.
+
+Because the audio icon's animations are lightweight, it's done at the
+full, highest possible refresh rate. This prevents the device from
+entering lower refresh rate states regardless of the video's fps.
+
+With this commit, such layers are not allowed to use > 60 Hz states for
+longer than 3 seconds.
+
+[gotenksIN - Adapt to 14]
+
+Change-Id: I065250bbbe3f0b9ff071779bcc43a4499463ef24
+Co-authored-by: Juhyung Park <qkrwngud825@gmail.com>
+Signed-off-by: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Signed-off-by: Omkar Chandorkar <gotenksIN@aospa.co>
+---
+ .../Scheduler/RefreshRateSelector.cpp         | 13 ++++++++++++-
+ .../Scheduler/RefreshRateSelector.h           |  5 ++++-
+ .../surfaceflinger/Scheduler/Scheduler.cpp    | 19 ++++++++++++++++++-
+ services/surfaceflinger/Scheduler/Scheduler.h |  5 +++++
+ 4 files changed, 39 insertions(+), 3 deletions(-)
+
+diff --git a/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp b/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
+index ae4feabaf9..af9dbf88cb 100644
+--- a/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
++++ b/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
+@@ -785,7 +785,18 @@ auto RefreshRateSelector::getRankedFrameRatesLocked(const std::vector<LayerRequi
+                 continue;
+             }
+ 
+-            const float layerScore = calculateLayerScoreLocked(layer, fps, isSeamlessSwitch);
++            float layerScore;
++            if (layer.vote == LayerVoteType::Heuristic && signals.heuristicIdle
++                    && isStrictlyLess(60_Hz, fps)) {
++                // Time for heuristic layer to keep using high refresh rate has expired
++                layerScore = 0;
++                localIsIdle = true;
++                ALOGV("%s expired to keep using %s", formatLayerInfo(layer, weight).c_str(),
++                      to_string(fps).c_str());
++            } else {
++                layerScore =
++                    calculateLayerScoreLocked(layer, fps, isSeamlessSwitch);
++            }
+             const float weightedLayerScore = weight * layerScore;
+ 
+             // Layer with fixed source has a special consideration which depends on the
+diff --git a/services/surfaceflinger/Scheduler/RefreshRateSelector.h b/services/surfaceflinger/Scheduler/RefreshRateSelector.h
+index ccf075f944..05a9b36107 100644
+--- a/services/surfaceflinger/Scheduler/RefreshRateSelector.h
++++ b/services/surfaceflinger/Scheduler/RefreshRateSelector.h
+@@ -215,12 +215,15 @@ public:
+         // Whether the display is about to be powered on, or has been in PowerMode::ON
+         // within the timeout of DisplayPowerTimer.
+         bool powerOnImminent = false;
++        // Whether the expiry for high refresh rate on heuristic layers has been reached.
++        bool heuristicIdle = false;
+ 
+         bool shouldEmitEvent() const { return !idle; }
+ 
+         bool operator==(GlobalSignals other) const {
+             return touch == other.touch && idle == other.idle &&
+-                    powerOnImminent == other.powerOnImminent;
++                    powerOnImminent == other.powerOnImminent &&
++                    heuristicIdle == other.heuristicIdle;
+         }
+ 
+         auto toString() const {
+diff --git a/services/surfaceflinger/Scheduler/Scheduler.cpp b/services/surfaceflinger/Scheduler/Scheduler.cpp
+index 4da76f6ecc..00004debda 100644
+--- a/services/surfaceflinger/Scheduler/Scheduler.cpp
++++ b/services/surfaceflinger/Scheduler/Scheduler.cpp
+@@ -78,6 +78,7 @@ Scheduler::~Scheduler() {
+     // Stop timers and wait for their threads to exit.
+     mDisplayPowerTimer.reset();
+     mTouchTimer.reset();
++    mHeuristicIdleTimer.reset();
+ 
+     // Stop idle timer and clear callbacks, as the RefreshRateSelector may outlive the Scheduler.
+     demotePacesetterDisplay({.toggleIdleTimer = true});
+@@ -763,6 +764,9 @@ void Scheduler::onTouchHint() {
+         mTouchTimer->reset();
+         pacesetterSelectorPtr()->resetKernelIdleTimer();
+     }
++    if (mHeuristicIdleTimer) {
++        mHeuristicIdleTimer->reset();
++    }
+ }
+ 
+ void Scheduler::setDisplayPowerMode(PhysicalDisplayId id, hal::PowerMode powerMode) {
+@@ -853,6 +857,11 @@ void Scheduler::idleTimerCallback(TimerState state) {
+     SFTRACE_INT("ExpiredIdleTimer", static_cast<int>(state));
+ }
+ 
++void Scheduler::heuristicIdleTimerCallback(TimerState state) {
++    applyPolicy(&Policy::heuristicIdleTimer, state);
++    ALOGV("%s: TimerState %d", __func__, static_cast<int>(state));
++}
++
+ void Scheduler::touchTimerCallback(TimerState state) {
+     const TouchState touch = state == TimerState::Reset ? TouchState::Active : TouchState::Inactive;
+     // Touch event will boost the refresh rate to performance.
+@@ -999,6 +1008,13 @@ std::shared_ptr<VsyncSchedule> Scheduler::promotePacesetterDisplayLocked(
+             pacesetter.selectorPtr->startIdleTimer();
+         }
+ 
++        mHeuristicIdleTimer.emplace(
++                "heuristicIdleTimer",
++                std::max(HEURISTIC_TIMEOUT, pacesetter.selectorPtr->getIdleTimerTimeout()),
++                [this] { heuristicIdleTimerCallback(TimerState::Reset); },
++                [this] { heuristicIdleTimerCallback(TimerState::Expired); });
++        mHeuristicIdleTimer->start();
++
+         newVsyncSchedulePtr = pacesetter.schedulePtr;
+ 
+         constexpr bool kForce = true;
+@@ -1242,7 +1258,8 @@ GlobalSignals Scheduler::makeGlobalSignals() const {
+ 
+     return {.touch = mTouchTimer && mPolicy.touch == TouchState::Active,
+             .idle = mPolicy.idleTimer == TimerState::Expired,
+-            .powerOnImminent = powerOnImminent};
++            .powerOnImminent = powerOnImminent,
++            .heuristicIdle = mPolicy.heuristicIdleTimer == TimerState::Expired};
+ }
+ 
+ FrameRateMode Scheduler::getPreferredDisplayMode() {
+diff --git a/services/surfaceflinger/Scheduler/Scheduler.h b/services/surfaceflinger/Scheduler/Scheduler.h
+index a2cdd460ca..70eae50207 100644
+--- a/services/surfaceflinger/Scheduler/Scheduler.h
++++ b/services/surfaceflinger/Scheduler/Scheduler.h
+@@ -371,6 +371,7 @@ private:
+     void kernelIdleTimerCallback(TimerState) EXCLUDES(mDisplayLock);
+     void idleTimerCallback(TimerState);
+     void touchTimerCallback(TimerState);
++    void heuristicIdleTimerCallback(TimerState);
+     void displayPowerTimerCallback(TimerState);
+ 
+     // VsyncSchedule delegate.
+@@ -495,6 +496,9 @@ private:
+     ftl::Optional<OneShotTimer> mTouchTimer;
+     // Timer used to monitor display power mode.
+     ftl::Optional<OneShotTimer> mDisplayPowerTimer;
++    // Timer used to enter idle refresh rate in heuristic layers.
++    std::optional<OneShotTimer> mHeuristicIdleTimer;
++    static constexpr std::chrono::milliseconds HEURISTIC_TIMEOUT = 3000ms;
+ 
+     // Injected delay prior to compositing, for simulating jank.
+     float mPacesetterFrameDurationFractionToSkip GUARDED_BY(kMainThreadContext) = 0.f;
+@@ -580,6 +584,7 @@ private:
+         // Policy for choosing the display mode.
+         LayerHistory::Summary contentRequirements;
+         TimerState idleTimer = TimerState::Reset;
++        TimerState heuristicIdleTimer = TimerState::Reset;
+         TouchState touch = TouchState::Inactive;
+         TimerState displayPowerTimer = TimerState::Expired;
+         hal::PowerMode displayPowerMode = hal::PowerMode::ON;
+-- 
+2.34.1
+

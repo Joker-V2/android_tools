@@ -1,0 +1,34 @@
+From 9aaa2d10db8c49bcdf8a988819aa2bc4ae3f6812 Mon Sep 17 00:00:00 2001
+From: Venkatarama Avadhani <venkataramaa@google.com>
+Date: Mon, 23 Dec 2024 09:49:24 +0530
+Subject: [PATCH 22/37] Fix Integer Overflow in WebmWriter
+
+When size is calculated in estimatedCueSize, the max file size is first
+multiplied by 6 and then divided by 1000. The multiplication operation
+could result in an Integer Overflow. This change reorders the
+multiplication and division to avoid the overflow.
+
+Test: atest StagefrightRecorderTest
+Bug: 360998270
+Google: 3428424
+Change-Id: Ia2e65cf2ed3cd02aa1f9714c4eef99fbb9b2394e
+---
+ media/libstagefright/webm/WebmWriter.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/media/libstagefright/webm/WebmWriter.cpp b/media/libstagefright/webm/WebmWriter.cpp
+index 151ce7cb1e..e49d2efe66 100644
+--- a/media/libstagefright/webm/WebmWriter.cpp
++++ b/media/libstagefright/webm/WebmWriter.cpp
+@@ -284,7 +284,7 @@ uint64_t WebmWriter::estimateCuesSize(int32_t bitRate) {
+ 
+     // Max file size limit is set
+     if (mMaxFileSizeLimitBytes != 0 && mIsFileSizeLimitExplicitlyRequested) {
+-        size = mMaxFileSizeLimitBytes * 6 / 1000;
++        size = mMaxFileSizeLimitBytes / 1000 * 6;
+     }
+ 
+     // Max file duration limit is set
+-- 
+2.34.1
+

@@ -1,0 +1,72 @@
+From f7d2e6b5f7e3e271b6531984716dcfafeb5c6b85 Mon Sep 17 00:00:00 2001
+From: Danny Baumann <dannybaumann@web.de>
+Date: Tue, 3 Mar 2015 10:43:28 +0100
+Subject: [PATCH 01/23] Allow sending vendor- or device-specific commands to
+ the camera HAL.
+
+Change-Id: I2aaa9e526b6f1a35d45e96b6d23e3db972d82733
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ core/java/android/hardware/Camera.java | 14 ++++++++++++++
+ core/jni/android_hardware_Camera.cpp   | 13 +++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/core/java/android/hardware/Camera.java b/core/java/android/hardware/Camera.java
+index 355f5711db06..08c78c5bb5be 100644
+--- a/core/java/android/hardware/Camera.java
++++ b/core/java/android/hardware/Camera.java
+@@ -1746,6 +1746,20 @@ public class Camera {
+         }
+     }
+ 
++    /**
++     * Send a vendor-specific camera command
++     *
++     * @hide
++     */
++    public final void sendVendorCommand(int cmd, int arg1, int arg2) {
++        if (cmd < 1000) {
++            throw new IllegalArgumentException("Command numbers must be at least 1000");
++        }
++        _sendVendorCommand(cmd, arg1, arg2);
++    }
++
++    private native final void _sendVendorCommand(int cmd, int arg1, int arg2);
++
+     /**
+      * Callback interface for zoom changes during a smooth zoom operation.
+      *
+diff --git a/core/jni/android_hardware_Camera.cpp b/core/jni/android_hardware_Camera.cpp
+index 42406147b2f0..062a7cf92e9f 100644
+--- a/core/jni/android_hardware_Camera.cpp
++++ b/core/jni/android_hardware_Camera.cpp
+@@ -1115,6 +1115,18 @@ static int32_t android_hardware_Camera_getAudioRestriction(
+     return ret;
+ }
+ 
++static void android_hardware_Camera_sendVendorCommand(JNIEnv *env, jobject thiz,
++        jint cmd, jint arg1, jint arg2)
++{
++    ALOGV("sendVendorCommand");
++    sp<Camera> camera = get_native_camera(env, thiz, NULL);
++    if (camera == 0) return;
++
++    if (camera->sendCommand(cmd, arg1, arg2) != NO_ERROR) {
++        jniThrowRuntimeException(env, "sending vendor command failed");
++    }
++}
++
+ //-------------------------------------------------
+ 
+ static const JNINativeMethod camMethods[] = {
+@@ -1156,6 +1168,7 @@ static const JNINativeMethod camMethods[] = {
+          (void *)android_hardware_Camera_enableFocusMoveCallback},
+         {"setAudioRestriction", "(I)V", (void *)android_hardware_Camera_setAudioRestriction},
+         {"getAudioRestriction", "()I", (void *)android_hardware_Camera_getAudioRestriction},
++        { "_sendVendorCommand", "(III)V", (void *)android_hardware_Camera_sendVendorCommand },
+ };
+ 
+ struct field {
+-- 
+2.34.1
+

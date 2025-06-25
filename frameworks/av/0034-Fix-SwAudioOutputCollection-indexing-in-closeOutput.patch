@@ -1,0 +1,41 @@
+From ea729a98683c166a4396ec919d9f6b55038f1743 Mon Sep 17 00:00:00 2001
+From: Sampath Shetty <Sampath.Shetty@dolby.com>
+Date: Wed, 16 Apr 2025 15:58:12 +1000
+Subject: [PATCH 34/37] Fix SwAudioOutputCollection indexing in closeOutput()
+
+Incorrect index handling during mix output closure results in a failed
+restoration of policy mix routing to previously available outputs.
+
+Audio routing failure after direct output usage leads to
+mono/stereo audio tracks playback failures when switching
+between direct and mixed audio paths.
+
+Ensure correct indexing when restoring the policy mix output.
+
+Bug: 411169295
+Google: 3594370
+Change-Id: I9daa9942baebb9a5278671a2371b48afac1fe333
+---
+ .../common/managerdefinitions/src/AudioPolicyMix.cpp        | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/services/audiopolicy/common/managerdefinitions/src/AudioPolicyMix.cpp b/services/audiopolicy/common/managerdefinitions/src/AudioPolicyMix.cpp
+index 0fd8dd8bd7..794c28be72 100644
+--- a/services/audiopolicy/common/managerdefinitions/src/AudioPolicyMix.cpp
++++ b/services/audiopolicy/common/managerdefinitions/src/AudioPolicyMix.cpp
+@@ -312,9 +312,9 @@ void AudioPolicyMixCollection::closeOutput(sp<SwAudioOutputDescriptor> &desc,
+         // Restore the policy mix mix output to the first opened output supporting a route to
+         // the mix device. This is because the current mix output can be changed to a direct output.
+         for (size_t j = 0; j < allOutputs.size(); ++j) {
+-            if (allOutputs[i] != desc && !allOutputs[i]->isDuplicated() &&
+-                allOutputs[i]->supportedDevices().contains(device)) {
+-                policyMix->setOutput(allOutputs[i]);
++            if (allOutputs[j] != desc && !allOutputs[j]->isDuplicated() &&
++                allOutputs[j]->supportedDevices().contains(device)) {
++                policyMix->setOutput(allOutputs[j]);
+                 break;
+             }
+         }
+-- 
+2.34.1
+

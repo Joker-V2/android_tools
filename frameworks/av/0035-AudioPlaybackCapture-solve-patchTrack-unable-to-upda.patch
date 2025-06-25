@@ -1,0 +1,125 @@
+From c48b013de2c6bcfd2dde43494ffd020840e67568 Mon Sep 17 00:00:00 2001
+From: chongyin <v-chongyin@xiaomi.com>
+Date: Mon, 14 Apr 2025 20:55:54 +0800
+Subject: [PATCH 35/37] AudioPlaybackCapture: solve patchTrack unable to update
+ speed issue
+
+PatchRecord is in the output thread of audiohal. Every time the track
+is consumed by the mixer and the ReleaseBuffer is executed, the data
+obtainBuffer is written into the PatchBuffer. When a third-party application
+uses AudioTrack::setPlaybackRate to timestretch the audio data, PatchRecord
+and PatchTrack need to update framecount and speed at the same time. And the
+remotesubmix thread where PatchTrack is located needs to perform timestretch
+processing synchronously to solve the problem of Track::interceptBuffer
+dropping frames.
+
+Signed-off-by: v-chongyin@xiaomi.com
+Google: 3586731
+Change-Id: I6b831b5a86ead8d940b9e0f474268c750b01592c
+---
+ services/audioflinger/AudioFlinger.cpp | 3 ++-
+ services/audioflinger/IAfTrack.h       | 3 +++
+ services/audioflinger/PlaybackTracks.h | 7 +++++++
+ services/audioflinger/Threads.cpp      | 1 +
+ services/audioflinger/Tracks.cpp       | 6 ++++++
+ 5 files changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/services/audioflinger/AudioFlinger.cpp b/services/audioflinger/AudioFlinger.cpp
+index 68c3626027..366d233900 100644
+--- a/services/audioflinger/AudioFlinger.cpp
++++ b/services/audioflinger/AudioFlinger.cpp
+@@ -4119,6 +4119,7 @@ void AudioFlinger::updateSecondaryOutputsForTrack_l(
+ 
+         const audio_output_flags_t outputFlags =
+                 (audio_output_flags_t)(track->getOutputFlags() & ~kIncompatiblePatchTrackFlags);
++        const AudioPlaybackRate playbackRate = track->audioTrackServerProxy()->getPlaybackRate();
+         sp<IAfPatchTrack> patchTrack = IAfPatchTrack::create(secondaryThread,
+                                                        track->streamType(),
+                                                        track->sampleRate(),
+@@ -4130,7 +4131,7 @@ void AudioFlinger::updateSecondaryOutputsForTrack_l(
+                                                        outputFlags,
+                                                        0ns /* timeout */,
+                                                        frameCountToBeReady,
+-                                                       track->getSpeed(),
++                                                       playbackRate.mSpeed,
+                                                        1.f /* volume */,
+                                                        false /* muted */);
+         status = patchTrack->initCheck();
+diff --git a/services/audioflinger/IAfTrack.h b/services/audioflinger/IAfTrack.h
+index c9c766f446..8871e0cea5 100644
+--- a/services/audioflinger/IAfTrack.h
++++ b/services/audioflinger/IAfTrack.h
+@@ -448,6 +448,7 @@ public:
+     // Internal mute, this is currently only used for bit-perfect playback
+     virtual bool getInternalMute() const = 0;
+     virtual void setInternalMute(bool muted) = 0;
++    virtual void setTeePatchesPlaybackRate(const AudioPlaybackRate &playbackRate) = 0;
+ };
+ 
+ // playback track, used by DuplicatingThread
+@@ -618,6 +619,8 @@ public:
+             float speed = 1.0f,
+             float volume = 1.0f,
+             bool muted = false);
++
++    virtual void setPlaybackRate(const AudioPlaybackRate &playbackRate) = 0;
+ };
+ 
+ class IAfPatchRecord : public virtual IAfRecordTrack, public virtual IAfPatchTrackBase {
+diff --git a/services/audioflinger/PlaybackTracks.h b/services/audioflinger/PlaybackTracks.h
+index c335c705a7..4afc4fa301 100644
+--- a/services/audioflinger/PlaybackTracks.h
++++ b/services/audioflinger/PlaybackTracks.h
+@@ -319,6 +319,11 @@ protected:
+     int8_t& retryCount() final { return mRetryCount; }
+     FastTrackUnderruns& fastTrackUnderruns() final { return mObservedUnderruns; }
+ 
++    void setTeePatchesPlaybackRate (const AudioPlaybackRate &playbackRate) override {
++        forEachTeePatchTrack_l([playbackRate](const auto& patchTrack) {
++            patchTrack->setPlaybackRate(playbackRate);
++        });
++    }
+ protected:
+     mutable FillingStatus mFillingStatus;
+     int8_t              mRetryCount;
+@@ -534,6 +539,8 @@ public:
+     status_t obtainBuffer(Proxy::Buffer* buffer, const struct timespec* timeOut = nullptr) final;
+     void releaseBuffer(Proxy::Buffer* buffer) final;
+ 
++    void setPlaybackRate (const AudioPlaybackRate &playbackRate) override;
++
+ private:
+     void restartIfDisabled() override;
+ };  // end of PatchTrack
+diff --git a/services/audioflinger/Threads.cpp b/services/audioflinger/Threads.cpp
+index 2229655e26..f398c77502 100644
+--- a/services/audioflinger/Threads.cpp
++++ b/services/audioflinger/Threads.cpp
+@@ -6201,6 +6201,7 @@ PlaybackThread::mixer_state MixerThread::prepareTracks_l(
+                 // cast away constness for this generic API.
+                 const_cast<void *>(reinterpret_cast<const void *>(&playbackRate)));
+ 
++            track->setTeePatchesPlaybackRate(playbackRate);
+             /*
+              * Select the appropriate output buffer for the track.
+              *
+diff --git a/services/audioflinger/Tracks.cpp b/services/audioflinger/Tracks.cpp
+index c9b578ff39..34612cd1dd 100644
+--- a/services/audioflinger/Tracks.cpp
++++ b/services/audioflinger/Tracks.cpp
+@@ -2801,6 +2801,12 @@ void PatchTrack::releaseBuffer(Proxy::Buffer* buffer)
+     }
+ }
+ 
++void PatchTrack::setPlaybackRate (const AudioPlaybackRate &playbackRate) {
++    if (mProxy != nullptr) {
++        sp<AudioTrackClientProxy>::cast(mProxy)->setPlaybackRate(playbackRate);
++    }
++}
++
+ void PatchTrack::restartIfDisabled()
+ {
+     if (android_atomic_and(~CBLK_DISABLED, &mCblk->mFlags) & CBLK_DISABLED) {
+-- 
+2.34.1
+

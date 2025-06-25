@@ -1,0 +1,53 @@
+From 40e4494274610b782fec547dbef1cd031d50f10e Mon Sep 17 00:00:00 2001
+From: jhenrique09 <jhenrique09.mcz@hotmail.com>
+Date: Mon, 20 Aug 2018 15:45:59 -0400
+Subject: [PATCH 06/23] Camera: Don't crash when trying to disable shutter
+ sound
+
+08-20 10:10:01.767  2210  2494 E FlashlightController: Couldn't initialize.
+08-20 10:10:01.767  2210  2494 E FlashlightController: java.lang.RuntimeException: Camera is being used after Camera.release() was called
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at android.hardware.Camera._enableShutterSound(Native Method)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at android.hardware.Camera.updateAppOpsPlayAudio(Camera.java:1833)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at android.hardware.Camera.initAppOps(Camera.java:629)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at android.hardware.Camera.<init>(Camera.java:606)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at android.hardware.Camera.getEmptyParameters(Camera.java:2214)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at android.hardware.camera2.legacy.LegacyMetadataMapper.createCharacteristics(LegacyMetadataMapper.java:151)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at android.hardware.camera2.CameraManager.getCameraCharacteristics(CameraManager.java:274)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at com.android.systemui.statusbar.policy.FlashlightControllerImpl.getCameraId(FlashlightControllerImpl.java:146)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at com.android.systemui.statusbar.policy.FlashlightControllerImpl.tryInitCamera(FlashlightControllerImpl.java:72)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at com.android.systemui.statusbar.policy.FlashlightControllerImpl.addCallback(FlashlightControllerImpl.java:120)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at com.android.systemui.statusbar.policy.FlashlightControllerImpl.addCallback(FlashlightControllerImpl.java:40)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at com.android.systemui.qs.tiles.FlashlightTile.handleSetListening(FlashlightTile.java:59)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at com.android.systemui.qs.tileimpl.QSTileImpl.handleSetListeningInternal(QSTileImpl.java:340)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at com.android.systemui.qs.tileimpl.QSTileImpl.access$700(QSTileImpl.java:64)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at com.android.systemui.qs.tileimpl.QSTileImpl$H.handleMessage(QSTileImpl.java:475)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at android.os.Handler.dispatchMessage(Handler.java:106)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at android.os.Looper.loop(Looper.java:193)
+08-20 10:10:01.767  2210  2494 E FlashlightController:   at android.os.HandlerThread.run(HandlerThread.java:65)
+
+Change-Id: I544b62bc9fab1dd19e4aa1fe2cde7c3435ccada8
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ core/java/android/hardware/Camera.java | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/core/java/android/hardware/Camera.java b/core/java/android/hardware/Camera.java
+index a62e9e6ae11b..cf0f82726560 100644
+--- a/core/java/android/hardware/Camera.java
++++ b/core/java/android/hardware/Camera.java
+@@ -1784,7 +1784,11 @@ public class Camera {
+                     } catch (RemoteException e) {
+                         Log.e(TAG, "Audio service is unavailable for queries");
+                     }
+-                    _enableShutterSound(false);
++                    try {
++                        _enableShutterSound(false);
++                    } catch (Exception e) {
++                        Log.e(TAG, "Couldn't disable shutter sound");
++                    }
+                 } else {
+                     enableShutterSound(mShutterSoundEnabledFromApp);
+                 }
+-- 
+2.34.1
+

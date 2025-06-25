@@ -1,0 +1,41 @@
+From 55ac3229a96a616d3027458f4c50e9f3f79827a6 Mon Sep 17 00:00:00 2001
+From: Emilian Peev <epeev@google.com>
+Date: Wed, 17 May 2023 16:35:57 -0700
+Subject: [PATCH 16/23] Camera: Decrement image references after
+ 'onNextImageAvailable'
+
+The advanced extension vendor side documentation explicitly states
+that we should decrement image references after calling the
+registered 'onNextImageAvailable' callback.
+Extension implementations must increment the image reference
+within the callback if they intend to keep the image for longer.
+
+Bug: 283038375
+Test: Camera CTS
+
+Change-Id: I007d3f91a5ef4554c9ff5e501e127ef953d86a58
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ .../cameraextensions/CameraExtensionsProxyService.java      | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/packages/services/CameraExtensionsProxy/src/com/android/cameraextensions/CameraExtensionsProxyService.java b/packages/services/CameraExtensionsProxy/src/com/android/cameraextensions/CameraExtensionsProxyService.java
+index 75d07bb80c05..145742cff975 100644
+--- a/packages/services/CameraExtensionsProxy/src/com/android/cameraextensions/CameraExtensionsProxyService.java
++++ b/packages/services/CameraExtensionsProxy/src/com/android/cameraextensions/CameraExtensionsProxyService.java
+@@ -1229,8 +1229,10 @@ public class CameraExtensionsProxyService extends Service {
+         public void onNextImageAvailable(OutputConfigId outputConfigId, ParcelImage img,
+                 String physicalCameraId) {
+             if (mImageProcessor != null) {
+-                mImageProcessor.onNextImageAvailable(outputConfigId.id, img.timestamp,
+-                        new ImageReferenceImpl(img), physicalCameraId);
++                ImageReferenceImpl imgRef = new ImageReferenceImpl(img);
++                mImageProcessor.onNextImageAvailable(outputConfigId.id, img.timestamp, imgRef,
++                        physicalCameraId);
++                imgRef.decrement();
+             }
+         }
+     }
+-- 
+2.34.1
+

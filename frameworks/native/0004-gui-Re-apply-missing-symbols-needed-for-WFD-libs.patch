@@ -1,0 +1,54 @@
+From 285bb6cc7be4e42ec095972065bab13f8b4b02ed Mon Sep 17 00:00:00 2001
+From: Nick Reuter <nreuter85@gmail.com>
+Date: Mon, 30 Sep 2024 20:18:14 -0500
+Subject: [PATCH 04/16] gui: Re-apply missing symbols needed for WFD libs
+
+ The change made at commit d53801c5273e34bc767e606454d32aa50f38ece8
+ updated the function names and arguments.
+
+Change-Id: I491e4e5b8fe20fcec0eab3246c7ef4ff3ecc43b9
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ libs/gui/SurfaceComposerClient.cpp           | 9 +++++++++
+ libs/gui/include/gui/SurfaceComposerClient.h | 5 +++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/libs/gui/SurfaceComposerClient.cpp b/libs/gui/SurfaceComposerClient.cpp
+index be88b11b9c..b0c260af69 100644
+--- a/libs/gui/SurfaceComposerClient.cpp
++++ b/libs/gui/SurfaceComposerClient.cpp
+@@ -1430,6 +1430,15 @@ status_t SurfaceComposerClient::destroyVirtualDisplay(const sp<IBinder>& display
+             .transactionError();
+ }
+ 
++sp<IBinder> SurfaceComposerClient::createDisplay(const String8& displayName, bool isSecure,
++                                                 float requestedRefereshRate) {
++    return SurfaceComposerClient::createVirtualDisplay(std::string(displayName.c_str()), isSecure, kEmpty, requestedRefereshRate);
++}
++
++void SurfaceComposerClient::destroyDisplay(const sp<IBinder>& displayToken) {
++    SurfaceComposerClient::destroyVirtualDisplay(displayToken);
++}
++
+ std::vector<PhysicalDisplayId> SurfaceComposerClient::getPhysicalDisplayIds() {
+     std::vector<int64_t> displayIds;
+     std::vector<PhysicalDisplayId> physicalDisplayIds;
+diff --git a/libs/gui/include/gui/SurfaceComposerClient.h b/libs/gui/include/gui/SurfaceComposerClient.h
+index 0ce0c0a9c3..cf59d712b9 100644
+--- a/libs/gui/include/gui/SurfaceComposerClient.h
++++ b/libs/gui/include/gui/SurfaceComposerClient.h
+@@ -399,6 +399,11 @@ public:
+ 
+     static status_t destroyVirtualDisplay(const sp<IBinder>& displayToken);
+ 
++    static sp<IBinder> createDisplay(const String8& displayName, bool isSecure,
++                                            float requestedRefreshRate = 0);
++
++    static void destroyDisplay(const sp<IBinder>& displayToken);
++
+     static std::vector<PhysicalDisplayId> getPhysicalDisplayIds();
+ 
+     static sp<IBinder> getPhysicalDisplayToken(PhysicalDisplayId displayId);
+-- 
+2.34.1
+

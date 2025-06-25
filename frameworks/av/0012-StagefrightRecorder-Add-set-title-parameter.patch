@@ -1,0 +1,30 @@
+From cef03cbeb65af298df1d5bdd6e3088daa79ed9b3 Mon Sep 17 00:00:00 2001
+From: cjh1249131356 <cjh1249131356@gmail.com>
+Date: Sun, 9 Oct 2022 14:45:25 +0800
+Subject: [PATCH 12/37] StagefrightRecorder: Add "set-title" parameter
+
+* Required by OnePlus / Oplus Camera.
+* Unused by others.
+
+Signed-off-by: cjh1249131356 <cjh1249131356@gmail.com>
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ media/libmediaplayerservice/StagefrightRecorder.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/media/libmediaplayerservice/StagefrightRecorder.cpp b/media/libmediaplayerservice/StagefrightRecorder.cpp
+index 79f6697a9a..b77c2effd1 100644
+--- a/media/libmediaplayerservice/StagefrightRecorder.cpp
++++ b/media/libmediaplayerservice/StagefrightRecorder.cpp
+@@ -1116,6 +1116,8 @@ status_t StagefrightRecorder::setParameter(
+         }
+     } else if (key == "log-session-id") {
+         return setLogSessionId(value);
++    } else if (key == "set-title") {
++        return OK;
+     } else {
+         ALOGE("setParameter: failed to find key %s", key.c_str());
+     }
+-- 
+2.34.1
+

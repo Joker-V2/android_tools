@@ -1,0 +1,44 @@
+From 1a460cd7d91c24824a66465e5f1eb7d77e32f0f6 Mon Sep 17 00:00:00 2001
+From: Juhyung Park <qkrwngud825@gmail.com>
+Date: Mon, 23 May 2022 08:14:41 +0900
+Subject: [PATCH 08/16] SF: Scheduler: relax measurements for heuristic mode
+
+30 frames for 300ms is quite enough for approximated calculation.
+
+As an added bonus, the device reacts quicker when a higher refresh rate
+should be used.
+
+Change-Id: Id8930ab7343cc4e974b78929615e6efdd1c2b27e
+Signed-off-by: Juhyung Park <qkrwngud825@gmail.com>
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ services/surfaceflinger/Scheduler/LayerInfo.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/services/surfaceflinger/Scheduler/LayerInfo.h b/services/surfaceflinger/Scheduler/LayerInfo.h
+index a7847bc240..12dbff4340 100644
+--- a/services/surfaceflinger/Scheduler/LayerInfo.h
++++ b/services/surfaceflinger/Scheduler/LayerInfo.h
+@@ -265,8 +265,8 @@ private:
+     // the refresh rate calculated is consistent with past values
+     class RefreshRateHistory {
+     public:
+-        static constexpr auto HISTORY_SIZE = 90;
+-        static constexpr std::chrono::nanoseconds HISTORY_DURATION = 2s;
++        static constexpr auto HISTORY_SIZE = 30;
++        static constexpr std::chrono::nanoseconds HISTORY_DURATION = 300ms;
+ 
+         RefreshRateHistory(const std::string& name) : mName(name) {}
+ 
+@@ -300,7 +300,7 @@ private:
+         const std::string mName;
+         mutable std::optional<HeuristicTraceTagData> mHeuristicTraceTagData;
+         std::deque<RefreshRateData> mRefreshRates;
+-        static constexpr float MARGIN_CONSISTENT_FPS = 1.0;
++        static constexpr float MARGIN_CONSISTENT_FPS = 5.0;
+         static constexpr float MARGIN_CONSISTENT_FPS_FOR_CLOSEST_REFRESH_RATE = 5.0;
+     };
+ 
+-- 
+2.34.1
+

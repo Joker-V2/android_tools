@@ -1,0 +1,167 @@
+From a5e4b61692b8a8a633fdf5686ef3292b65846735 Mon Sep 17 00:00:00 2001
+From: Juhyung Park <qkrwngud825@gmail.com>
+Date: Tue, 6 Aug 2024 09:41:54 +0000
+Subject: [PATCH 09/16] SF: Scheduler: opportunistically enter idle after touch
+
+This commit drastically changes how the scheduler works.
+
+Now, the device will be forced to maintain idle state (set to 60 Hz in
+this commit) after touchboost is finished and idle state is entered once.
+
+The main principle of this commit is that the highest refresh rate isn't
+necessary for everything and applying it only for touch-related events
+are plenty enough.
+
+It's been deliberately set to 60 Hz so that anomalies from the nature of
+imperfectiveness of this method is minimum and less-noticeable compared
+to the lowest possible refresh rate.
+
+Example of this commit in action:
+
+<Before 1>
+| Touch starts | Scrolling starts | Touch ends | Scrolling ends | Scroll-bar timeout | Scroll-bar fade-out animation | Idle  |
+| 120 Hz       | 120 Hz           | 120 Hz     | 120 Hz         | 24 Hz              | 120 Hz                        | 24 Hz |
+
+<After 1>
+| Touch starts | Scrolling starts | Touch ends | Scrolling ends | Scroll-bar timeout | Scroll-bar fade-out animation | Idle  |
+| 120 Hz       | 120 Hz           | 120 Hz     | 120 Hz         | 24 Hz              | 60 Hz                         | 24 Hz |
+
+<Before 2>
+| Idle  | Wi-Fi status bar icon changes | Timeout | Idle  |
+| 24 Hz | 120 Hz                        | 120 Hz  | 24 Hz |
+
+<After 2>
+| Idle  | Wi-Fi status bar icon changes | Timeout | Idle  |
+| 24 Hz | 60 Hz                         | 60 Hz   | 24 Hz |
+
+[Jyotiraditya Panda <jyotiraditya@aospa.co>]
+  - Adapt to AOSPA/uvite (Android 14)
+
+Change-Id: I27dc60f35821ee4a5726f67f9b538b394194d00c
+Co-authored-by: Jyotiraditya Panda <jyotiraditya@aospa.co>
+Signed-off-by: Jyotiraditya Panda <jyotiraditya@aospa.co>
+Signed-off-by: Omkar Chandorkar <gotenksIN@aospa.co>
+---
+ .../Scheduler/RefreshRateSelector.cpp         | 44 ++++++++++++++++++-
+ .../Scheduler/RefreshRateSelector.h           |  1 +
+ 2 files changed, 43 insertions(+), 2 deletions(-)
+
+diff --git a/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp b/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
+index b58b041d14..6f16c54674 100644
+--- a/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
++++ b/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
+@@ -33,6 +33,7 @@
+ #include <ftl/fake_guard.h>
+ #include <ftl/match.h>
+ #include <ftl/unit.h>
++#include <scheduler/Fps.h>
+ #include <scheduler/FrameRateMode.h>
+ 
+ #include "RefreshRateSelector.h"
+@@ -589,6 +590,8 @@ auto RefreshRateSelector::getRankedFrameRatesLocked(const std::vector<LayerRequi
+     int seamedFocusedLayers = 0;
+     int categorySmoothSwitchOnlyLayers = 0;
+ 
++    static bool localIsIdle;
++
+     for (const auto& layer : layers) {
+         switch (layer.vote) {
+             case LayerVoteType::NoVote:
+@@ -657,6 +660,7 @@ auto RefreshRateSelector::getRankedFrameRatesLocked(const std::vector<LayerRequi
+         const auto ranking = rankFrameRates(anchorGroup, RefreshRateOrder::Descending);
+         SFTRACE_FORMAT_INSTANT("%s (Touch Boost)",
+                                to_string(ranking.front().frameRateMode.fps).c_str());
++        localIsIdle = false;
+         return {ranking, GlobalSignals{.touch = true}};
+     }
+ 
+@@ -668,6 +672,7 @@ auto RefreshRateSelector::getRankedFrameRatesLocked(const std::vector<LayerRequi
+         ALOGV("Idle");
+         const auto ranking = rankFrameRates(activeMode.getGroup(), RefreshRateOrder::Ascending);
+         SFTRACE_FORMAT_INSTANT("%s (Idle)", to_string(ranking.front().frameRateMode.fps).c_str());
++        localIsIdle = true;
+         return {ranking, GlobalSignals{.idle = true}};
+     }
+ 
+@@ -886,6 +891,31 @@ auto RefreshRateSelector::getRankedFrameRatesLocked(const std::vector<LayerRequi
+                        return ScoredFrameRate{score.frameRateMode, score.overallScore};
+                    });
+ 
++    const auto selectivelyForceIdle = [&]() REQUIRES(mLock) -> RankedFrameRates {
++        ALOGV("localIsIdle: %s", localIsIdle ? "true" : "false");
++        if (localIsIdle && mIdleRefreshRateModeIt != mDisplayModes.end()
++                && isStrictlyLess(60_Hz, ranking.front().frameRateMode.fps)) {
++            /*
++             * We heavily rely on touch to boost higher than 60 fps.
++             * Fallback to 60 fps if a higher fps was calculated.
++             */
++            ALOGV("Forcing idle");
++            auto idleRanking = rankFrameRates(activeMode.getGroup(), RefreshRateOrder::Ascending);
++            // Find the 60 Hz mode in the ranking
++            auto it = std::find_if(idleRanking.begin(), idleRanking.end(),
++                                   [](const ScoredFrameRate& sfr) {
++                                       return isApproxEqual(sfr.frameRateMode.fps, 60_Hz);
++                                   });
++            if (it != idleRanking.end()) {
++                return {FrameRateRanking{*it}, GlobalSignals{.idle = true}};
++            }
++            return {idleRanking, GlobalSignals{.idle = true}};
++        }
++
++        // Handle the case where we don't force idle or bestRefreshRate is not available
++        return {ranking, kNoSignals};
++    };
++
+     const bool noLayerScore = std::all_of(scores.begin(), scores.end(), [](RefreshRateScore score) {
+         return score.overallScore == 0;
+     });
+@@ -904,7 +934,7 @@ auto RefreshRateSelector::getRankedFrameRatesLocked(const std::vector<LayerRequi
+             ALOGV("primaryRangeIsSingleRate");
+             SFTRACE_FORMAT_INSTANT("%s (primaryRangeIsSingleRate)",
+                                    to_string(ranking.front().frameRateMode.fps).c_str());
+-            return {ranking, kNoSignals};
++            return selectivelyForceIdle();
+         }
+     }
+ 
+@@ -955,7 +985,7 @@ auto RefreshRateSelector::getRankedFrameRatesLocked(const std::vector<LayerRequi
+ 
+     ALOGV("%s (scored)", to_string(ranking.front().frameRateMode.fps).c_str());
+     SFTRACE_FORMAT_INSTANT("%s (scored)", to_string(ranking.front().frameRateMode.fps).c_str());
+-    return {ranking, kNoSignals};
++    return selectivelyForceIdle();
+ }
+ 
+ auto RefreshRateSelector::getFrameRateOverrides(const std::vector<LayerRequirement>& layers,
+@@ -1518,6 +1548,16 @@ void RefreshRateSelector::constructAvailableRefreshRates() {
+                             "render range. policy: %s",
+                             rangeName, policy->toString().c_str());
+ 
++        // Reset and store idle refresh rate
++        mIdleRefreshRateModeIt = mDisplayModes.end();
++        for (auto it = mDisplayModes.begin(); it != mDisplayModes.end(); ++it) {
++            if (isApproxEqual(it->second->getFps(), 60_Hz)) {
++                mIdleRefreshRateModeIt = it;
++                ALOGV("idleRefreshRate set!");
++                break;
++            }
++        }
++
+         const auto stringifyModes = [&] {
+             std::string str;
+             for (const auto& frameRateMode : frameRateModes) {
+diff --git a/services/surfaceflinger/Scheduler/RefreshRateSelector.h b/services/surfaceflinger/Scheduler/RefreshRateSelector.h
+index 8e173b11c8..ccf075f944 100644
+--- a/services/surfaceflinger/Scheduler/RefreshRateSelector.h
++++ b/services/surfaceflinger/Scheduler/RefreshRateSelector.h
+@@ -549,6 +549,7 @@ private:
+ 
+     DisplayModeIterator mMinRefreshRateModeIt GUARDED_BY(mLock);
+     DisplayModeIterator mMaxRefreshRateModeIt GUARDED_BY(mLock);
++    DisplayModeIterator mIdleRefreshRateModeIt GUARDED_BY(mLock);
+ 
+     // Display modes that satisfy the Policy's ranges, filtered and sorted by refresh rate.
+     std::vector<FrameRateMode> mPrimaryFrameRates GUARDED_BY(mLock);
+-- 
+2.34.1
+

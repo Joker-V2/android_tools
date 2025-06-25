@@ -1,0 +1,46 @@
+From 731035e553fca628402bba0f13bff0a06ff82685 Mon Sep 17 00:00:00 2001
+From: Shunkai Yao <yaoshunkai@google.com>
+Date: Mon, 3 Mar 2025 17:57:08 +0000
+Subject: [PATCH 30/37] Skip setDevice to HAL for AUDIO_DEVICE_NONE
+
+Flag: EXEMPT bugfix
+Bug: 399565043
+Test: atest CtsMediaAudioTestCases
+Google: 3529211
+Change-Id: I1854daf8b8ccddaa3f883afb3ddada1be77c3cc3
+Merged-In: I1854daf8b8ccddaa3f883afb3ddada1be77c3cc3
+---
+ services/audioflinger/Effects.cpp | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/services/audioflinger/Effects.cpp b/services/audioflinger/Effects.cpp
+index fb7f5a60ea..5323a9c4b7 100644
+--- a/services/audioflinger/Effects.cpp
++++ b/services/audioflinger/Effects.cpp
+@@ -1446,11 +1446,6 @@ void EffectChain::setVolumeForOutput_l(uint32_t left, uint32_t right)
+ status_t EffectModule::sendSetAudioDevicesCommand(
+         const AudioDeviceTypeAddrVector &devices, uint32_t cmdCode)
+ {
+-    // for AIDL, use setDevices to pass the AudioDeviceTypeAddrVector
+-    if (!EffectConfiguration::isHidl()) {
+-        return mEffectInterface->setDevices(devices);
+-    }
+-
+     audio_devices_t deviceType = deviceTypesToBitMask(getAudioDeviceTypes(devices));
+     if (deviceType == AUDIO_DEVICE_NONE) {
+         return NO_ERROR;
+@@ -1462,6 +1457,11 @@ status_t EffectModule::sendSetAudioDevicesCommand(
+     }
+     status_t status = NO_ERROR;
+     if ((mDescriptor.flags & EFFECT_FLAG_DEVICE_MASK) == EFFECT_FLAG_DEVICE_IND) {
++        // for AIDL, use setDevices to pass the AudioDeviceTypeAddrVector
++        if (!EffectConfiguration::isHidl()) {
++            return mEffectInterface->setDevices(devices);
++        }
++
+         status_t cmdStatus;
+         uint32_t size = sizeof(status_t);
+         // FIXME: use audio device types and addresses when the hal interface is ready.
+-- 
+2.34.1
+

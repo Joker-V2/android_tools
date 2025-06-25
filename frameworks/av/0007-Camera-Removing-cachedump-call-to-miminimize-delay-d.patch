@@ -1,0 +1,41 @@
+From 74ef019ede91885a1393b94f81d7dd63dc9a4e41 Mon Sep 17 00:00:00 2001
+From: Venugopal Nadipalli <quic_vnadipal@quicinc.com>
+Date: Tue, 26 Jul 2022 12:05:31 +0530
+Subject: [PATCH 07/37] Camera: Removing cachedump call to miminimize delay
+ during close.
+
+- The cacheDump() call was added for better debugging by always
+  dumping the state of the last camera session. Since LT/VT chipsets
+  it is adding significant delay during camera close. Hence we are
+  removing cachedump call during disconnect.
+  https://partnerissuetracker.corp.google.com/issues/237992867
+
+CRs-Fixed: 3228616
+Change-Id: Ibba2a51f08c592bf15b046642101e11d890ed248
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ .../camera/libcameraservice/common/Camera2ClientBase.cpp  | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/services/camera/libcameraservice/common/Camera2ClientBase.cpp b/services/camera/libcameraservice/common/Camera2ClientBase.cpp
+index 03abf719d9..f9892b4fab 100644
+--- a/services/camera/libcameraservice/common/Camera2ClientBase.cpp
++++ b/services/camera/libcameraservice/common/Camera2ClientBase.cpp
+@@ -283,14 +283,6 @@ binder::Status Camera2ClientBase<TClientBase>::disconnectImpl() {
+ 
+     ALOGD("Camera %s: Shutting down", TClientBase::mCameraIdStr.c_str());
+ 
+-    // Before detaching the device, cache the info from current open session.
+-    // The disconnected check avoids duplication of info and also prevents
+-    // deadlock while acquiring service lock in cacheDump.
+-    if (!TClientBase::mDisconnected) {
+-        ALOGD("Camera %s: start to cacheDump", TClientBase::mCameraIdStr.c_str());
+-        Camera2ClientBase::getCameraService()->cacheDump();
+-    }
+-
+     detachDevice();
+ 
+     CameraService::BasicClient::disconnect();
+-- 
+2.34.1
+

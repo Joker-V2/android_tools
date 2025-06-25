@@ -1,0 +1,39 @@
+From e7f36da6c6592f2361407f521114d3e452692d7c Mon Sep 17 00:00:00 2001
+From: Juhyung Park <qkrwngud825@gmail.com>
+Date: Mon, 23 May 2022 08:22:49 +0900
+Subject: [PATCH 10/16] SF: Scheduler: touch boost whenever possible
+
+With the previous commit entering idle aggressively, it is important that
+touch boost works well.
+
+Since there are valid cases where we would want touch boost to work when
+there are no layers detected (e.g., notification panel pull down if it
+was not accounted for during the initial vote type set), change touch
+boost to work regardless of layer's status.
+
+Change-Id: I0a125cf9027440de205fa4ca611657b70b8a088f
+Signed-off-by: Juhyung Park <qkrwngud825@gmail.com>
+Signed-off-by: Adithya R <gh0strider.2k18.reborn@gmail.com>
+---
+ services/surfaceflinger/Scheduler/RefreshRateSelector.cpp | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp b/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
+index 6f16c54674..ae4feabaf9 100644
+--- a/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
++++ b/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
+@@ -653,9 +653,8 @@ auto RefreshRateSelector::getRankedFrameRatesLocked(const std::vector<LayerRequi
+     const auto anchorGroup =
+             seamedFocusedLayers > 0 ? activeMode.getGroup() : defaultMode->getGroup();
+ 
+-    // Consider the touch event if there are no Explicit* layers. Otherwise wait until after we've
+-    // selected a refresh rate to see if we should apply touch boost.
+-    if (signals.touch && !hasExplicitVoteLayers) {
++    // Touch boost whenever possible as we opportunistically enter idle aggressively
++    if (signals.touch) {
+         ALOGV("Touch Boost");
+         const auto ranking = rankFrameRates(anchorGroup, RefreshRateOrder::Descending);
+         SFTRACE_FORMAT_INSTANT("%s (Touch Boost)",
+-- 
+2.34.1
+

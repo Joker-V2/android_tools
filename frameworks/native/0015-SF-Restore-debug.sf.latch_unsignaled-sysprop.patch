@@ -1,0 +1,58 @@
+From 65578418ebadd2d80652a27456ece7945684e599 Mon Sep 17 00:00:00 2001
+From: minaripenguin <minaripenguin@users.noreply.github.com>
+Date: Thu, 22 Aug 2024 11:49:40 +0800
+Subject: [PATCH 15/16] SF: Restore debug.sf.latch_unsignaled sysprop
+
+partially reverts: 1fd9bfca9d86a3b0d0ff46596ec948b147f44619
+
+Signed-off-by: minaripenguin <minaripenguin@users.noreply.github.com>
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ services/surfaceflinger/SurfaceFlinger.cpp | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
+index ab1adcefac..fc39b0e834 100644
+--- a/services/surfaceflinger/SurfaceFlinger.cpp
++++ b/services/surfaceflinger/SurfaceFlinger.cpp
+@@ -563,6 +563,10 @@ LatchUnsignaledConfig SurfaceFlinger::getLatchUnsignaledConfig() {
+         return LatchUnsignaledConfig::AutoSingleLayer;
+     }
+ 
++    if (base::GetBoolProperty("debug.sf.latch_unsignaled"s, false)) {
++        return LatchUnsignaledConfig::Always;
++    }
++
+     return LatchUnsignaledConfig::Disabled;
+ }
+ 
+@@ -4725,10 +4729,13 @@ TransactionHandler::TransactionReadiness SurfaceFlinger::transactionReadyBufferC
+                     return TraverseBuffersReturnValues::STOP_TRAVERSAL;
+                 }
+ 
++                // ignore the acquire fence if LatchUnsignaledConfig::Always is set.
++                const bool checkAcquireFence =
++                        enableLatchUnsignaledConfig != LatchUnsignaledConfig::Always;
+                 const bool acquireFenceAvailable = s.bufferData &&
+                         s.bufferData->flags.test(BufferData::BufferDataChange::fenceChanged) &&
+                         s.bufferData->acquireFence;
+-                const bool fenceSignaled = !acquireFenceAvailable ||
++                const bool fenceSignaled = !checkAcquireFence || !acquireFenceAvailable ||
+                         s.bufferData->acquireFence->getStatus() != Fence::Status::Unsignaled;
+                 if (!fenceSignaled) {
+                     // check fence status
+@@ -4831,6 +4838,11 @@ bool SurfaceFlinger::shouldLatchUnsignaled(const layer_state_t& state, size_t nu
+         return false;
+     }
+ 
++    if (enableLatchUnsignaledConfig == LatchUnsignaledConfig::Always) {
++        SFTRACE_FORMAT_INSTANT("%s: true (LatchUnsignaledConfig::Always)", __func__);
++        return true;
++    }
++
+     // We only want to latch unsignaled when a single layer is updated in this
+     // transaction (i.e. not a blast sync transaction).
+     if (numStates != 1) {
+-- 
+2.34.1
+

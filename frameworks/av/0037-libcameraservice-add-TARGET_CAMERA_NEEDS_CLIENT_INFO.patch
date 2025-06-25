@@ -1,0 +1,91 @@
+From c792cd55685730eee41d031076d3cc93c4f6d613 Mon Sep 17 00:00:00 2001
+From: Hikari-no-Tenshi <kyryljan.serhij@gmail.com>
+Date: Tue, 9 Nov 2021 19:49:41 +0200
+Subject: [PATCH 37/37] libcameraservice: add
+ TARGET_CAMERA_NEEDS_CLIENT_INFO_LIB
+
+Directly set camera package name by using OnePlusCameraProvider service.
+
+Co-authored-by: Pranav Vashi <neobuddy89@gmail.com>
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ services/camera/libcameraservice/Android.bp   |  6 +++++
+ .../camera/libcameraservice/CameraService.cpp | 24 +++++++++++++++++++
+ 2 files changed, 30 insertions(+)
+
+diff --git a/services/camera/libcameraservice/Android.bp b/services/camera/libcameraservice/Android.bp
+index 6e19effc06..7c80719613 100644
+--- a/services/camera/libcameraservice/Android.bp
++++ b/services/camera/libcameraservice/Android.bp
+@@ -238,6 +238,12 @@ cc_library {
+     ] + select(soong_config_variable("camera", "package_name"), {
+         any @ flag_val: ["-DTARGET_CAMERA_PACKAGE_NAME=" + flag_val],
+         default: [],
++    }) + select(soong_config_variable("camera", "needs_client_info_lib"), {
++        "true": ["-DTARGET_CAMERA_NEEDS_CLIENT_INFO_LIB"],
++        default: [],
++    }) + select(soong_config_variable("camera", "needs_client_info_lib_oplus"), {
++        "true": ["-DTARGET_CAMERA_NEEDS_CLIENT_INFO_LIB_OPLUS"],
++        default: [],
+     }),
+ }
+ 
+diff --git a/services/camera/libcameraservice/CameraService.cpp b/services/camera/libcameraservice/CameraService.cpp
+index cc58401226..4a10aba5de 100644
+--- a/services/camera/libcameraservice/CameraService.cpp
++++ b/services/camera/libcameraservice/CameraService.cpp
+@@ -88,6 +88,14 @@
+ #include "utils/TagMonitor.h"
+ #include "utils/Utils.h"
+ 
++#ifdef CAMERA_NEEDS_CLIENT_INFO_LIB
++#include <vendor/oneplus/hardware/camera/1.0/IOnePlusCameraProvider.h>
++#endif
++
++#ifdef CAMERA_NEEDS_CLIENT_INFO_LIB_OPLUS
++#include <vendor/oplus/hardware/cameraMDM/2.0/IOPlusCameraMDM.h>
++#endif
++
+ namespace {
+     const char* kActivityServiceName = "activity";
+     const char* kSensorPrivacyServiceName = "sensor_privacy";
+@@ -137,6 +145,12 @@ using hardware::camera2::ICameraInjectionCallback;
+ using hardware::camera2::ICameraInjectionSession;
+ using hardware::camera2::utils::CameraIdAndSessionConfiguration;
+ using hardware::camera2::utils::ConcurrentCameraIdCombination;
++#ifdef CAMERA_NEEDS_CLIENT_INFO_LIB
++using ::vendor::oneplus::hardware::camera::V1_0::IOnePlusCameraProvider;
++#endif
++#ifdef CAMERA_NEEDS_CLIENT_INFO_LIB_OPLUS
++using ::vendor::oplus::hardware::cameraMDM::V2_0::IOPlusCameraMDM;
++#endif
+ 
+ namespace flags = com::android::internal::camera::flags;
+ namespace vd_flags = android::companion::virtualdevice::flags;
+@@ -172,6 +186,12 @@ static const std::string &sCameraInjectExternalCameraPermission =
+ // Constant integer for FGS Logging, used to denote the API type for logger
+ static const int LOG_FGS_CAMERA_API = 1;
+ const char *sFileName = "lastOpenSessionDumpFile";
++#ifdef CAMERA_NEEDS_CLIENT_INFO_LIB
++static const sp<IOnePlusCameraProvider> gVendorCameraProviderService = IOnePlusCameraProvider::getService();
++#endif
++#ifdef CAMERA_NEEDS_CLIENT_INFO_LIB_OPLUS
++static const sp<IOPlusCameraMDM> gVendorCameraProviderService = IOPlusCameraMDM::getService();
++#endif
+ static constexpr int32_t kSystemNativeClientScore = resource_policy::PERCEPTIBLE_APP_ADJ;
+ static constexpr int32_t kSystemNativeClientState =
+         ActivityManager::PROCESS_STATE_PERSISTENT_UI;
+@@ -4445,6 +4465,10 @@ status_t CameraService::BasicClient::notifyCameraOpening() {
+     sCameraService->updateOpenCloseStatus(mCameraIdStr, true /*open*/, getPackageName(),
+             mSharedMode);
+ 
++#if defined (CAMERA_NEEDS_CLIENT_INFO_LIB) || defined (CAMERA_NEEDS_CLIENT_INFO_LIB_OPLUS)
++    gVendorCameraProviderService->setPackageName(getPackageName().c_str());
++#endif
++
+     return OK;
+ }
+ 
+-- 
+2.34.1
+

@@ -1,0 +1,36 @@
+From dcd8f19e7e0328500c14fc38632f9ff520054ada Mon Sep 17 00:00:00 2001
+From: Juhyung Park <qkrwngud825@gmail.com>
+Date: Mon, 23 May 2022 08:08:49 +0900
+Subject: [PATCH 07/16] SF: Scheduler: remove presentTime check in
+ calculateAverageFrameTime()
+
+presentTime is missing when the user isn't touching the screen. To make
+the estimation more accurate regardless of the user's input, remove this
+check.
+
+Change-Id: I27c55989b7f3d5ef5efe6b0d709135122bb6ba87
+Signed-off-by: Juhyung Park <qkrwngud825@gmail.com>
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ services/surfaceflinger/Scheduler/LayerInfo.cpp | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/services/surfaceflinger/Scheduler/LayerInfo.cpp b/services/surfaceflinger/Scheduler/LayerInfo.cpp
+index 6e2b943509..a41875ae8f 100644
+--- a/services/surfaceflinger/Scheduler/LayerInfo.cpp
++++ b/services/surfaceflinger/Scheduler/LayerInfo.cpp
+@@ -212,11 +212,6 @@ std::optional<nsecs_t> LayerInfo::calculateAverageFrameTime() const {
+     const bool isMissingPresentTime =
+             std::any_of(mFrameTimes.begin(), mFrameTimes.end(),
+                         [](auto frame) { return frame.presentTime == 0; });
+-    if (isMissingPresentTime && !mLastRefreshRate.reported.isValid()) {
+-        // If there are no presentation timestamps and we haven't calculated
+-        // one in the past then we can't calculate the refresh rate
+-        return std::nullopt;
+-    }
+ 
+     // Calculate the average frame time based on presentation timestamps. If those
+     // doesn't exist, we look at the time the buffer was queued only. We can do that only if
+-- 
+2.34.1
+

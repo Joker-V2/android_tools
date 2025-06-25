@@ -1,0 +1,38 @@
+From d64d1c2ad3068289c4266d50c377dc21de5a0b43 Mon Sep 17 00:00:00 2001
+From: Juhyung Park <qkrwngud825@gmail.com>
+Date: Mon, 5 Aug 2024 16:13:00 +0000
+Subject: [PATCH 06/16] SF: Scheduler: maintain current refresh rate if no
+ layers are detected
+
+No layers definitely doesn't mean new changes happened; so there's no
+need to enforce the maximum refresh rate. Maintain current refresh rate
+instead.
+
+[gotenksIN: adapt to 14]
+
+Change-Id: I31c9edc1a8ff3ff8340afd2f731df66755ffc9e0
+Co-authored-by: Omkar Chandorkar <gotenksIN@aospa.co>
+Signed-off-by: Omkar Chandorkar <gotenksIN@aospa.co>
+---
+ services/surfaceflinger/Scheduler/RefreshRateSelector.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp b/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
+index 97f1f8ff31..b58b041d14 100644
+--- a/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
++++ b/services/surfaceflinger/Scheduler/RefreshRateSelector.cpp
+@@ -671,9 +671,10 @@ auto RefreshRateSelector::getRankedFrameRatesLocked(const std::vector<LayerRequi
+         return {ranking, GlobalSignals{.idle = true}};
+     }
+ 
++    // LMO Edit: If there are no layers, prefer to stay with the current config
+     if (layers.empty() || noVoteLayers == layers.size()) {
+         ALOGV("No layers with votes");
+-        const auto ranking = rankFrameRates(anchorGroup, RefreshRateOrder::Descending);
++        const auto ranking = rankFrameRates(anchorGroup, RefreshRateOrder::Ascending, activeMode.getId());
+         SFTRACE_FORMAT_INSTANT("%s (No layers with votes)",
+                                to_string(ranking.front().frameRateMode.fps).c_str());
+         return {ranking, kNoSignals};
+-- 
+2.34.1
+

@@ -1,0 +1,37 @@
+From 1bd230edb206d22525cd79431bd9b5cd3c3631ba Mon Sep 17 00:00:00 2001
+From: Pranav Vashi <neobuddy89@gmail.com>
+Date: Sat, 3 Aug 2024 03:34:46 +0530
+Subject: [PATCH 22/23] Camera: Prevent array index out of bound exception
+
+Log:
+time: 1721847938260
+msg: java.lang.ArrayIndexOutOfBoundsException: length=0; index=1
+stacktrace: java.lang.ArrayIndexOutOfBoundsException: length=0; index=1
+	at android.util.ArrayMap.valueAt(ArrayMap.java:532)
+	at android.hardware.camera2.CameraManager$CameraManagerGlobal.extractCameraIdListLocked(CameraManager.java:2131)
+	at android.hardware.camera2.CameraManager$CameraManagerGlobal.getCameraIdList(CameraManager.java:2308)
+	at android.hardware.camera2.CameraManager.getCameraIdList(CameraManager.java:248)
+	at cee.a(PG:7)
+
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ core/java/android/hardware/camera2/CameraManager.java | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/core/java/android/hardware/camera2/CameraManager.java b/core/java/android/hardware/camera2/CameraManager.java
+index 43032af38fbd..b2591a428db4 100644
+--- a/core/java/android/hardware/camera2/CameraManager.java
++++ b/core/java/android/hardware/camera2/CameraManager.java
+@@ -2488,6 +2488,9 @@ public final class CameraManager {
+                 List<String> cameraIds = new ArrayList<>();
+                 boolean exposeAuxCamera = Camera.shouldExposeAuxCamera();
+                 int size = exposeAuxCamera ? mDeviceStatus.size() : 2;
++                if (mDeviceStatus.size() < size) {
++                    size = mDeviceStatus.size();
++                }
+                 for (int i = 0; i < size; i++) {
+                     int status = mDeviceStatus.valueAt(i);
+                     DeviceCameraInfo info = mDeviceStatus.keyAt(i);
+-- 
+2.34.1
+

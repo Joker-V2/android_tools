@@ -1,0 +1,36 @@
+From e8515125158b25565365d0c941d5086b25f12b76 Mon Sep 17 00:00:00 2001
+From: Govind R Sekhar <quic_gsekhar@quicinc.com>
+Date: Thu, 11 Jul 2024 15:11:35 +0530
+Subject: [PATCH 16/16] SF: change LatchUnsignaledConfig property precedence
+
+CRs-Fixed: 3785154
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ services/surfaceflinger/SurfaceFlinger.cpp | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
+index fc39b0e834..df0b9a9619 100644
+--- a/services/surfaceflinger/SurfaceFlinger.cpp
++++ b/services/surfaceflinger/SurfaceFlinger.cpp
+@@ -559,14 +559,12 @@ SurfaceFlinger::SurfaceFlinger(Factory& factory) : SurfaceFlinger(factory, SkipI
+ }
+ 
+ LatchUnsignaledConfig SurfaceFlinger::getLatchUnsignaledConfig() {
+-    if (base::GetBoolProperty("debug.sf.auto_latch_unsignaled"s, true)) {
+-        return LatchUnsignaledConfig::AutoSingleLayer;
+-    }
+-
+     if (base::GetBoolProperty("debug.sf.latch_unsignaled"s, false)) {
+         return LatchUnsignaledConfig::Always;
+     }
+-
++    if (base::GetBoolProperty("debug.sf.auto_latch_unsignaled"s, true)) {
++        return LatchUnsignaledConfig::AutoSingleLayer;
++    }
+     return LatchUnsignaledConfig::Disabled;
+ }
+ 
+-- 
+2.34.1
+

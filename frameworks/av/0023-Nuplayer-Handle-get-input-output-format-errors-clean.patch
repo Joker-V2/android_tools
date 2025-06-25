@@ -1,0 +1,51 @@
+From fee0ead6ef69cefa6516cb96a45369f3acedc033 Mon Sep 17 00:00:00 2001
+From: guochuang <guochuang@xiaomi.corp-partner.google.com>
+Date: Wed, 20 Nov 2024 16:56:00 +0800
+Subject: [PATCH 23/37] Nuplayer: Handle get input/output format errors cleanly
+
+In NuplayerDecoder, after MediaCodec::configure() returns success,
+it is assumed that MediaCodec is in CONFIGURED state.
+But, after MediaCodec::configure() has returned success, the codec
+may be recycled by the mediaresourcemanager and its status will be
+set to released.
+So, errors from MediaCodec::getInputFormat() and getOutputFormat()
+need to be handled cleanly instead of assert checks.
+
+Bug: 379989075
+Test: MediaPlayerTest
+Google: 3367078
+Change-Id: Iaaa03fb264c6b8ba7c784a2c00111c8a5e6153a7
+Signed-off-by: guochuang <guochuang@xiaomi.corp-partner.google.com>
+---
+ .../nuplayer/NuPlayerDecoder.cpp                  | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/media/libmediaplayerservice/nuplayer/NuPlayerDecoder.cpp b/media/libmediaplayerservice/nuplayer/NuPlayerDecoder.cpp
+index 3987a675e8..a45b95d149 100644
+--- a/media/libmediaplayerservice/nuplayer/NuPlayerDecoder.cpp
++++ b/media/libmediaplayerservice/nuplayer/NuPlayerDecoder.cpp
+@@ -374,9 +374,18 @@ void NuPlayer::Decoder::onConfigure(const sp<AMessage> &format) {
+     }
+     rememberCodecSpecificData(format);
+ 
+-    // the following should work in configured state
+-    CHECK_EQ((status_t)OK, mCodec->getOutputFormat(&mOutputFormat));
+-    CHECK_EQ((status_t)OK, mCodec->getInputFormat(&mInputFormat));
++    err = mCodec->getOutputFormat(&mOutputFormat);
++    if (err == OK) {
++        err = mCodec->getInputFormat(&mInputFormat);
++    }
++    if (err != OK) {
++        ALOGE("Failed to get input/output format from [%s] decoder (err=%d)",
++                mComponentName.c_str(), err);
++        mCodec->release();
++        mCodec.clear();
++        handleError(err);
++        return;
++    }
+ 
+     {
+         Mutex::Autolock autolock(mStatsLock);
+-- 
+2.34.1
+

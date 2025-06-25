@@ -1,0 +1,53 @@
+From 14cef96e4a84863c8846f4e87275955e747f3e07 Mon Sep 17 00:00:00 2001
+From: zhouchenchang <zhouchenchang@xiaomi.com>
+Date: Fri, 28 Mar 2025 17:49:24 +0800
+Subject: [PATCH 32/37] Audio: fix ~refbase() crash caused by race condition
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+[cause]：When ~SuspendedEffectDesc() is called, mSuspendedEffects race condition cause strong refcount of SuspendedEffectDesc obj is 1, which causing a fatal error.
+[example]:
+    1. thread1:
+	AudioFlinger::setEffectSuspended
+		|-> ThreadBase::setEffectSuspended_l
+			|-> EffectChain::setEffectSuspended_l
+				|-> ~SuspendedEffectDesc
+					|-> ~RefBase
+    2. thread2:
+	EffectChain::EffectCallback::onEffectDisable
+		|-> EffectCallback::checkSuspendOnEffectEnabled
+			|-> EffectChain::checkSuspendOnEffectEnabled_l
+				|-> incStrong
+[solution]：add mutex for mSuspendedEffects
+
+Google: 3563870
+Change-Id: I344747a4f2cd5ea7620ce74f11625926a23f178a
+Signed-off-by: zhouchenchang <zhouchenchang@xiaomi.com>
+---
+ services/audioflinger/Effects.cpp | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/services/audioflinger/Effects.cpp b/services/audioflinger/Effects.cpp
+index 5323a9c4b7..d919c1358e 100644
+--- a/services/audioflinger/Effects.cpp
++++ b/services/audioflinger/Effects.cpp
+@@ -3376,7 +3376,15 @@ void EffectChain::EffectCallback::checkSuspendOnEffectEnabled(const sp<IAfEffect
+         return;
+     }
+     // in EffectChain context, an EffectBase is always from an EffectModule so static cast is safe
++    if (!threadLocked) {
++        t->mutex().lock();
++    }
++
+     c->checkSuspendOnEffectEnabled_l(effect->asEffectModule(), enabled);
++
++    if (!threadLocked) {
++        t->mutex().unlock();
++    }
+ }
+ 
+ void EffectChain::EffectCallback::onEffectEnable(const sp<IAfEffectBase>& effect) {
+-- 
+2.34.1
+
